@@ -78,6 +78,8 @@ def parse_annual_xml(xml_path: str | Path) -> pd.DataFrame:
                     {
                         "station_id": station_id,
                         "cp": str(cp),
+                        "adresse": elem.findtext("adresse"),
+                        "ville": elem.findtext("ville"),
                         "road_type": {"A": "AUTOROUTE", "R": "ROUTE"}.get(pop, "UNKNOWN"),
                         "latitude": float(lat) / 100000.0 if lat else np.nan,
                         "longitude": float(lon) / 100000.0 if lon else np.nan,

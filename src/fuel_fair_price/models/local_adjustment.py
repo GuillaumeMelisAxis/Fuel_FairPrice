@@ -441,43 +441,30 @@ def add_local_peer_scores(
             out.iloc[valid_idx, out.columns.get_loc(col)] = values
 
     out["local_flag"] = "NORMAL"
-
-    enough_confidence = out["peer_confidence"].isin(
-        ["HIGH", "MEDIUM"]
-    )
-
+    enough_confidence = out["peer_confidence"].isin(["HIGH", "MEDIUM"])
     high = (
         enough_confidence
         & (out["local_anomaly_score"] > 2.0)
         & (out["local_excess_cent_l"] > 5.0)
     )
-
     very_high = (
         enough_confidence
         & (out["local_anomaly_score"] > 3.0)
         & (out["local_excess_cent_l"] > 10.0)
     )
-
     low_conf_review = (
         (out["peer_confidence"] == "LOW")
+        & (out["local_anomaly_score"] > 2.0)
         & (out["local_excess_cent_l"] > 5.0)
     )
-
-    insufficient_peers = (
-        out["peer_confidence"] == "INSUFFICIENT"
-    )
+    insufficient_peers = out["peer_confidence"] == "INSUFFICIENT"
 
     out.loc[high, "local_flag"] = "HIGH"
     out.loc[very_high, "local_flag"] = "VERY_HIGH"
-
-    out.loc[
-        low_conf_review,
-        "local_flag"
-    ] = "REVIEW_LOW_CONFIDENCE"
-
+    out.loc[low_conf_review, "local_flag"] = "REVIEW_LOW_CONFIDENCE"
     out.loc[
         insufficient_peers,
-        "local_flag"
+        "local_flag",
     ] = "UNASSESSED_INSUFFICIENT_PEERS"
 
     return out

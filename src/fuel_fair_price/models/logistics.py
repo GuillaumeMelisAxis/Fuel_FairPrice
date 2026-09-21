@@ -198,30 +198,20 @@ def fit_logistics_premium(
 
     for cls in sorted(set(out["accessibility_class"].astype(str))):
         n_train = int(count_map.get(cls, 0))
-        confidence = _confidence_from_count(
-            n_train,
-            config,
-        )
-
-        status = (
-            "PROVISIONAL"
-            if confidence == "INSUFFICIENT"
-            else "ESTIMATED"
-        )
-
+        confidence = _confidence_from_count(n_train, config)
         diagnostics.append(
             {
                 "factor": "accessibility_class",
                 "level": cls,
-                "effect_cent_l": float(
-                    premium_map.get(cls, 0.0)
-                ),
-                "raw_effect_cent_l": float(
-                    raw_map.get(cls, 0.0)
-                ),
+                "effect_cent_l": float(premium_map.get(cls, 0.0)),
+                "raw_effect_cent_l": float(raw_map.get(cls, 0.0)),
                 "train_count": n_train,
                 "confidence": confidence,
-                "status": status,
+                "status": (
+                    "PROVISIONAL"
+                    if confidence == "INSUFFICIENT"
+                    else "ESTIMATED"
+                ),
             }
         )
 

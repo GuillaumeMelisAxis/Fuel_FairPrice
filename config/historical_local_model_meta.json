@@ -1,0 +1,47 @@
+{
+  "model_version": "0.5.0",
+  "model_type": "HISTORICAL_PANEL",
+  "target": "relative_price_cent_l",
+  "time_effect": "date_x_fuel_national_station_median_removed",
+  "station_fixed_effect_applied_to_fair_price": false,
+  "factors": [
+    "code_region",
+    "code_departement",
+    "road_type",
+    "competition_bucket",
+    "isolation_bucket",
+    "accessibility_class"
+  ],
+  "config": {
+    "trim_abs_robust_score": 4.0,
+    "n_backfit_iterations": 10,
+    "region_shrinkage_stations": 80.0,
+    "department_shrinkage_stations": 40.0,
+    "road_shrinkage_stations": 100.0,
+    "competition_shrinkage_stations": 80.0,
+    "isolation_shrinkage_stations": 50.0,
+    "accessibility_shrinkage_stations": 10.0,
+    "persistent_bias_shrinkage_months": 6.0,
+    "high_confidence_stations": 100,
+    "medium_confidence_stations": 30,
+    "low_confidence_stations": 10
+  },
+  "fuels": {
+    "GAZOLE": {
+      "centre_cent_l": -0.37449779423676377,
+      "train_start": "2025-01-31",
+      "train_end": "2026-08-31",
+      "n_observations": 179260,
+      "n_unique_stations": 9932,
+      "n_months": 20
+    },
+    "SP95": {
+      "centre_cent_l": -0.20952083723549403,
+      "train_start": "2025-01-31",
+      "train_end": "2026-08-31",
+      "n_observations": 57368,
+      "n_unique_stations": 3995,
+      "n_months": 20
+    }
+  }
+}

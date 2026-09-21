@@ -216,3 +216,22 @@ def test_accessibility_override_classifies_ile_d_yeu():
     out = add_accessibility_features(df, overrides=overrides)
     assert out.iloc[0]["accessibility_class"] == "FERRY_ISLAND"
     assert out.iloc[0]["logistics_peer_group"] == "ILE_YEU"
+
+
+def test_insufficient_peers_are_unassessed_not_normal():
+    from fuel_fair_price.models.local_adjustment import add_local_peer_scores
+
+    df = pd.DataFrame(
+        {
+            "id": ["1", "2"],
+            "fuel": ["SP95", "SP95"],
+            "latitude": [48.0, 48.01],
+            "longitude": [2.0, 2.01],
+            "local_residual_cent_l": [20.0, 3.0],
+            "accessibility_class": ["FERRY_ISLAND", "FERRY_ISLAND"],
+            "logistics_peer_group": ["A", "B"],
+        }
+    )
+    out = add_local_peer_scores(df)
+    assert set(out["peer_confidence"]) == {"INSUFFICIENT"}
+    assert set(out["local_flag"]) == {"UNASSESSED_INSUFFICIENT_PEERS"}

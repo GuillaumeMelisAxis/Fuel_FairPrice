@@ -1,252 +1,227 @@
-# Fuel Fair Price France — v0.4
+# Fuel Fair Price France — v0.5
 
-Prototype Python d'indice de **fair price SP95-E5 / Gazole** pour la France métropolitaine hors Corse.
+Research prototype for a daily French SP95-E5 / Gazole fair-price index and
+station-level anomaly diagnostics.
 
-## Architecture de l'indice
+## What changes in v0.5
 
-La v0.4 sépare désormais trois niveaux :
+v0.4.x estimated local premiums from the current cross-section. v0.5 learns them
+from an official historical **station-date panel** built from the annual
+government fuel-price archives.
 
-```text
-1. Fair price national fondamental
-2. Prime locale structurelle
-3. Anomalie relative aux stations géographiquement proches
-```
+The live decomposition is now:
 
-Le fair national reste :
+\[
+P^{fair,local}_{i,t}
+=
+P^{fair,national}_{t}
++
+L_i^{hist}
+\]
 
-```text
-fair_national = (refined market component + normal distribution margin + excise) * (1 + VAT)
-```
+where `L_i^hist` is predicted from persistent observable local factors:
 
-La composante raffinée utilise la logique v0.3 : ancrage DGEC, proxy raffiné quotidien, puis bridge Brent + EUR/USD si le proxy produit n'est plus à jour.
+- region;
+- department;
+- route / autoroute;
+- local competition;
+- isolation;
+- accessibility / logistics class.
 
-## Local adjustment v0.4
+The historical target is not the raw price. For each month and fuel, v0.5 removes
+the national station median:
 
-### 1. Variables locales
+\[
+y_{i,t}
+=
+100\left(P_{i,t}
+-
+\operatorname{Median}_j P_{j,t}\right).
+\]
 
-La v0.4 reconstruit, pour chaque carburant :
+This absorbs the common `date × fuel` price level before estimating local structure.
+A national market shock therefore cannot be learned as a local premium.
 
-- type de station : route / autoroute (`pop` officiel : `R` / `A`);
-- région;
-- département;
-- distance géodésique au concurrent le plus proche;
-- nombre de stations vendant le même carburant dans un rayon de 2, 5, 10, 20 et 50 km;
-- bucket de concurrence locale;
-- bucket d'isolement.
+## Important design choice: no station fixed effect in fair price
 
-Les distances sont des distances Haversine à vol d'oiseau, pas des distances routières.
+v0.5 estimates a `persistent_station_bias_cent_l`, but **does not add it to the
+fair price**. Otherwise a station that is persistently expensive could gradually
+become its own definition of "normal".
 
-### 2. Prime locale structurelle
+The persistent bias is exported only as a diagnostic.
 
-Le modèle n'apprend **pas** le niveau national du spread. Il travaille sur :
+## Shrinkage is based on unique stations
 
-```text
-relative_spread_i = spread_i - median_national_spread
-```
+A ferry-island class represented by two stations observed for 18 months still has
+`n_stations = 2`, not an artificial sample size of 36. Factor reliability and
+shrinkage use unique station counts.
 
-Ainsi, si tout le marché gazole est +13 c/L au-dessus du fair national, ce +13 c/L ne devient pas une "prime locale normale".
-
-La prime locale est un modèle additif robuste :
-
-```text
-local_premium
-  = region_effect
-  + department_effect
-  + road_type_effect
-  + competition_effect
-  + isolation_effect
-```
-
-Les effets sont estimés par backfitting sur des médianes robustes, avec shrinkage vers zéro pour les groupes de petite taille. Les observations extrêmes (|robust z| > 3 par défaut) ne servent pas à calibrer les effets locaux.
-
-La prime finale est recentrée pour avoir une médiane nationale nulle.
-
-```text
-local_fair_i = fair_national + structural_local_premium_i
-```
-
-### 3. Score de voisinage
-
-Après l'ajustement structurel :
-
-```text
-local_residual_i = station_price_i - local_fair_i
-```
-
-Chaque station est ensuite comparée à ses voisins géographiques sur ce résidu ajusté.
-
-Le peer radius est adaptatif :
-
-```text
-10 km -> si au moins 5 pairs
-20 km -> sinon
-50 km -> sinon
-nearest 5 stations -> fallback final
-```
-
-Le score est robuste :
-
-```text
-local_anomaly_score =
-    (local_residual - median(peer residuals))
-    / (1.4826 * MAD(peer residuals))
-```
-
-Flags par défaut :
-
-- `NORMAL`;
-- `HIGH` si `local_anomaly_score > 2` et résidu local > 5 c/L;
-- `VERY_HIGH` si `local_anomaly_score > 3` et résidu local > 10 c/L;
-- `MARKET_DATA_STALE` si la donnée marché fondamentale est trop vieille.
-
-Cette double condition évite de signaler comme anomalie une station statistiquement différente mais seulement de quelques dixièmes de centime.
-
-## Pourquoi conserver les deux spreads ?
-
-La v0.4 garde simultanément :
-
-- `spread_cent_l` : écart au fair fondamental national;
-- `structural_local_premium_cent_l` : coût/prix local structurel estimé;
-- `local_residual_cent_l` : écart restant après ajustement local;
-- `local_anomaly_score` : caractère atypique par rapport aux stations proches.
-
-Cela permet de distinguer :
-
-```text
-marché national cher
-vs
-zone locale structurellement chère
-vs
-station individuellement atypique
-```
-
-## Fraîcheur marché
-
-Chaque fair price expose :
-
-- `market_mode`: `PRODUCT_PROXY` ou `BRENT_FX_BRIDGE`;
-- `bridge_source`: `YAHOO_DELAYED`, `FRED_FALLBACK` ou `FRED_PRODUCT_PROXY`;
-- `effective_market_date`;
-- `product_proxy_date`;
-- `official_anchor_date`;
-- `bridge_span_days`;
-- `market_freshness`: `CURRENT`, `STALE`, `VERY_STALE`.
-
-Si `market_freshness == VERY_STALE`, les flags d'anomalie sont désactivés.
-
-## Données stations
-
-Les prix SP95/Gazole et leurs timestamps sont reconstruits depuis le champ brut officiel `prix` (`@nom`, `@valeur`, `@maj`) en timezone `Europe/Paris`.
-
-Les prix vieux de plus de 30 jours restent accessibles dans le flux brut mais ne participent pas au scoring live.
-
-## Installation
+## Setup
 
 ```powershell
-python -m venv .venv
-.venv\Scripts\activate
 python -m pip install -e .
 ```
 
-## Calibration marché
+### 1. Build the historical panel
+
+By default, the script starts in January 2025 and ends at the last complete month.
+It automatically downloads the prior year for carry-forward of valid January
+prices.
 
 ```powershell
-python scripts/build_eu_market_history.py
-python scripts/run_market_calibration.py
+python scripts/build_historical_panel.py
 ```
 
-## Lancer l'indice live
+Outputs:
+
+```text
+data/historical_station_panel.csv.gz
+output/historical_panel_summary.csv
+```
+
+Optional custom window:
+
+```powershell
+python scripts/build_historical_panel.py --start 2025-01 --end 2026-08
+```
+
+Annual archives are cached in:
+
+```text
+data/raw/annual/
+```
+
+### 2. Train and validate the historical model
+
+```powershell
+python scripts/train_historical_local_model.py
+```
+
+The last three months are used as an out-of-sample holdout diagnostic, then the
+final model is refit on all available months.
+
+Outputs:
+
+```text
+config/historical_local_model.csv
+config/historical_local_model_meta.json
+config/station_persistent_bias.csv
+
+output/historical_model_validation.csv
+output/historical_model_effects.csv
+output/station_persistent_bias.csv
+```
+
+### 3. Run the live index
 
 ```powershell
 python main.py
 ```
 
-Sorties principales :
+If the historical model exists, the console shows:
 
 ```text
-output/live_index_summary.csv
-output/live_market_snapshot.csv
-output/live_station_scores.csv
-output/local_adjustment_effects.csv
-output/daily_refined_nowcast.csv
+LOCAL MODEL: HISTORICAL_PANEL v0.5
 ```
 
-`local_adjustment_effects.csv` permet d'auditer les primes apprises par région, département, route/autoroute, concurrence et isolement.
-
-## Limites de la v0.4
-
-Le modèle local est un modèle transversal robuste, pas un modèle causal. En particulier :
-
-- les distances sont géodésiques et ne capturent pas les temps de trajet;
-- l'insularité n'est pas codée manuellement : elle est approchée via l'isolement géographique et la densité de concurrents;
-- l'enseigne n'est pas disponible dans l'Open Data officiel;
-- les effets locaux sont recalibrés sur la coupe instantanée et devront être stabilisés historiquement dans une version ultérieure.
-
-Les scores détectent des **anomalies tarifaires**, pas une preuve juridique d'abus.
-
-## v0.4.2 peer-score stabilisation
-
-The local peer score uses at least 15 peers. Its standardized scale is floored at 2 c/L to avoid numerical explosions when nearby stations all quote identical or nearly identical prices:
-
-```
-local_excess = local_residual - median(peer_residuals)
-peer_scale   = max(1.4826 * MAD(peer_residuals), 2.0)
-local_anomaly_score = local_excess / peer_scale
-```
-
-`peer_confidence` describes the geographic strength of the comparison:
-
-- `HIGH`: at least 30 peers within 20 km;
-- `MEDIUM`: at least 15 peers within 50 km;
-- `LOW`: wider-radius or nearest-N fallback;
-- `INSUFFICIENT`: fewer than 15 usable peers.
-
-Low-confidence outliers are labelled `REVIEW_LOW_CONFIDENCE` rather than automatically treated as high-confidence anomalies.
-
-
-## v0.4.2 — Logistics-aware adjustment
-
-The public local score is now named `local_anomaly_score` rather than a Z-score.
-Its definition is unchanged statistically but is more accurately described as a
-robust peer anomaly score:
+If it does not exist, `main.py` remains usable and explicitly falls back to:
 
 ```text
-local_excess = local_residual - median(peer residuals)
-peer_scale = max(1.4826 * MAD(peer residuals), 2 c/L)
-local_anomaly_score = local_excess / peer_scale
+LOCAL MODEL: CROSS_SECTIONAL_FALLBACK
 ```
 
-Stations are also assigned an `accessibility_class`:
+## Historical model
 
-- `MAINLAND`
-- `FERRY_ISLAND`
-- `ROAD_CONNECTED_ISLAND`
-- `REMOTE_ISOLATED`
+For each fuel, robust median backfitting estimates:
 
-Known island classifications are kept in `config/logistics_overrides.csv` so the
-registry is auditable and extendable without changing model code. The feed does
-not contain road-topology/altitude data, so the model deliberately uses
-`REMOTE_ISOLATED` rather than guessing that an isolated station is mountainous.
+\[
+L_{i,t}
+=
+\alpha_{\mathrm{region}}
++\alpha_{\mathrm{department}}
++\alpha_{\mathrm{road}}
++\alpha_{\mathrm{competition}}
++\alpha_{\mathrm{isolation}}
++\alpha_{\mathrm{accessibility}}.
+\]
 
-### Logistics premium
+Each group effect is first estimated from **station-level median residuals** and is
+then shrunk toward zero according to the number of unique stations represented.
 
-`MAINLAND` is fixed to a logistics premium of zero. Other accessibility classes
-receive an empirical cross-sectional effect relative to mainland, shrunk toward
-zero. For ferry/road-island/remote classes, negative logistics effects are floored
-at zero: constrained access may add logistics cost but is not interpreted as a
-logistics discount. The estimate is exposed through:
+`FERRY_ISLAND`, `ROAD_CONNECTED_ISLAND` and `REMOTE_ISOLATED` accessibility effects
+are constrained to be non-negative as logistics effects.
 
-- `logistics_premium_cent_l`
-- `logistics_train_count`
-- `logistics_confidence`
+## Live output additions
 
-This is still a v0.4.x cross-sectional correction; the v0.5 historical panel is
-needed before treating these logistics premiums as stable structural estimates.
+Important v0.5 fields:
 
-### Logistics-aware peers
+```text
+local_model_type
+local_model_train_start
+local_model_train_end
+local_model_months
 
-For `FERRY_ISLAND`, geographic distance to the mainland is not used as the main
-peer rule. The model first tries the same `logistics_peer_group` (same island),
-then other `FERRY_ISLAND` stations. Small cross-island comparisons are labelled
-`LOW` confidence and can only produce `REVIEW_LOW_CONFIDENCE`, not a high-confidence
-`VERY_HIGH` flag.
+base_structural_local_premium_cent_l
+logistics_premium_cent_l
+structural_local_premium_cent_l
+structural_premium_confidence
+historical_model_coverage
+
+persistent_station_bias_cent_l
+persistent_bias_months
+
+local_fair_price_eur_l
+local_residual_cent_l
+local_excess_cent_l
+local_anomaly_score
+peer_confidence
+local_flag
+```
+
+`persistent_station_bias_cent_l` is informational and is never included in
+`local_fair_price_eur_l`.
+
+## Confidence semantics
+
+For historical factor effects, confidence is based on unique stations:
+
+- `HIGH`: at least 100 unique stations;
+- `MEDIUM`: at least 30;
+- `LOW`: at least 10;
+- `INSUFFICIENT`: fewer than 10.
+
+A logistics effect with insufficient support is labelled `PROVISIONAL`.
+
+A station with no valid local peer comparison is:
+
+```text
+UNASSESSED_INSUFFICIENT_PEERS
+```
+
+—not `NORMAL`.
+
+## Tests
+
+```powershell
+pytest -q
+```
+
+The packaged v0.5 passes the complete test suite, including tests for:
+
+- time-effect removal;
+- unique-station shrinkage;
+- ferry-island confidence;
+- persistent station bias not entering fair price;
+- stabilized local anomaly score;
+- insufficient-peer semantics;
+- the existing market and station pipelines.
+
+## Research status
+
+v0.5 is still a research prototype, not a legal determination of excessive or
+unlawful pricing. The model separates:
+
+1. national fundamental spread;
+2. historical structural local premium;
+3. current local excess versus peers;
+4. persistent station pricing bias as a diagnostic.
