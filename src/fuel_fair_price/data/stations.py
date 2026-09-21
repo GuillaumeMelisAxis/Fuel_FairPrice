@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from io import StringIO
-
+import json
 import pandas as pd
 import requests
 
@@ -29,6 +29,8 @@ KEEP_COLUMNS = [
     "gazole_rupture_type",
     "sp95_rupture_type",
 ]
+
+MAX_PRICE_AGE_HOURS = 72
 
 
 def fetch_current_stations(timeout: int = 60) -> pd.DataFrame:
@@ -70,38 +72,169 @@ def clean_stations(df: pd.DataFrame) -> pd.DataFrame:
 
     return out.reset_index(drop=True)
 
+def clean_stations(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+
+    out["code_region"] = (
+        pd.to_numeric(
+            out["code_region"],
+            errors="coerce",
+        )
+        .astype("Int64")
+        .astype("string")
+        .str.zfill(2)
+    )
+
+    out = out[
+        out["code_region"].isin(
+            MAINLAND_EX_CORSICA_REGION_CODES
+        )
+    ].copy()
+
+    return out
+
+def _parse_raw_prices(value):
+    """Parse the raw `prix` field returned by the official dataset."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return []
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except json.JSONDecodeError:
+            return []
+
+    return []
+
+
+def _extract_fuel(raw_prices, fuel_name):
+    """
+    Extract price and update timestamp for one fuel
+    from the raw `prix` field.
+    """
+    prices = _parse_raw_prices(raw_prices)
+
+    for item in prices:
+        if item.get("@nom") != fuel_name:
+            continue
+
+        price = pd.to_numeric(
+            item.get("@valeur"),
+            errors="coerce",
+        )
+
+        raw_date = item.get("@maj")
+
+        if not raw_date:
+            updated_at = pd.NaT
+        else:
+            updated_at = pd.Timestamp(raw_date)
+
+            # @maj is expressed in French local time
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.tz_localize(
+                    "Europe/Paris",
+                    ambiguous="NaT",
+                    nonexistent="NaT",
+                )
+
+        return price, updated_at
+
+    return float("nan"), pd.NaT
 
 def to_long_format(df: pd.DataFrame) -> pd.DataFrame:
-    """Return one row per station and fuel, restricted to SP95 and Gazole."""
-    frames: list[pd.DataFrame] = []
 
-    mapping = {
-        "SP95": ("sp95_prix", "sp95_maj", "sp95_rupture_type"),
-        "GAZOLE": ("gazole_prix", "gazole_maj", "gazole_rupture_type"),
-    }
+    if "prix" not in df.columns:
+        raise KeyError(
+            "Column 'prix' is required to reconstruct "
+            "raw fuel prices and timestamps."
+        )
 
-    id_cols = [
-        c for c in [
-            "id", "latitude", "longitude", "cp", "adresse", "ville",
-            "departement", "code_departement", "region", "code_region",
-            "road_type",
-        ] if c in df.columns
+    common_cols = [
+        "id",
+        "ville",
+        "code_region",
     ]
 
-    for fuel, (price_col, update_col, rupture_col) in mapping.items():
-        if price_col not in df.columns:
-            continue
-        cols = id_cols + [c for c in [price_col, update_col, rupture_col] if c in df.columns]
-        tmp = df[cols].copy()
+    common_cols = [
+        col for col in common_cols
+        if col in df.columns
+    ]
+
+    fuel_mapping = {
+        "SP95": "SP95",
+        "GAZOLE": "Gazole",
+    }
+
+    frames = []
+
+    for fuel, raw_name in fuel_mapping.items():
+
+        tmp = df[common_cols + ["prix"]].copy()
+
+        extracted = tmp["prix"].apply(
+            lambda value: _extract_fuel(
+                value,
+                raw_name,
+            )
+        )
+
+        tmp["price_eur_l"] = extracted.apply(
+            lambda x: x[0]
+        )
+
+        tmp["updated_at"] = extracted.apply(
+            lambda x: x[1]
+        )
+
         tmp["fuel"] = fuel
-        tmp = tmp.rename(columns={price_col: "price_eur_l", update_col: "price_updated_at"})
-        if rupture_col in tmp.columns:
-            tmp = tmp.rename(columns={rupture_col: "rupture_type"})
-            tmp = tmp[tmp["rupture_type"].isna() | (tmp["rupture_type"].astype(str).str.len() == 0)]
-        tmp = tmp.dropna(subset=["price_eur_l"])
+
+        tmp = tmp.drop(
+            columns=["prix"]
+        )
+
         frames.append(tmp)
 
-    if not frames:
-        return pd.DataFrame()
+    out = pd.concat(
+        frames,
+        ignore_index=True,
+    )
 
-    return pd.concat(frames, ignore_index=True)
+    # Remove stations that do not sell this fuel
+    out = out.dropna(
+        subset=[
+            "price_eur_l",
+            "updated_at",
+        ]
+    ).copy()
+
+    # Everything remains in Europe/Paris
+    now = pd.Timestamp.now(
+        tz="Europe/Paris"
+    )
+
+    out["age_hours"] = (
+        now - out["updated_at"]
+    ).dt.total_seconds() / 3600
+
+    out["price_age_days"] = (
+        out["age_hours"] / 24
+    )
+
+    out["freshness_flag"] = "CURRENT"
+
+    out.loc[
+        out["price_age_days"] > 7,
+        "freshness_flag",
+    ] = "OLD"
+
+    out.loc[
+        out["price_age_days"] > 30,
+        "freshness_flag",
+    ] = "VERY_OLD"
+
+    return out.reset_index(drop=True)
