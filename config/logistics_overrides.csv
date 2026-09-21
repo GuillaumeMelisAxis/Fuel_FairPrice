@@ -1,0 +1,36 @@
+match_type,match_value,accessibility_class,logistics_peer_group
+ville,L'Île-d'Yeu,FERRY_ISLAND,ILE_YEU
+ville,Le Palais,FERRY_ISLAND,BELLE_ILE
+ville,Bangor,FERRY_ISLAND,BELLE_ILE
+ville,Locmaria,FERRY_ISLAND,BELLE_ILE
+ville,Sauzon,FERRY_ISLAND,BELLE_ILE
+ville,Groix,FERRY_ISLAND,GROIX
+ville,Île-aux-Moines,FERRY_ISLAND,ILE_AUX_MOINES
+ville,Île-d'Arz,FERRY_ISLAND,ILE_ARZ
+ville,Île-de-Batz,FERRY_ISLAND,ILE_BATZ
+ville,Ouessant,FERRY_ISLAND,OUESSANT
+ville,Molène,FERRY_ISLAND,MOLENE
+ville,Île-de-Sein,FERRY_ISLAND,ILE_SEIN
+ville,Île-de-Bréhat,FERRY_ISLAND,BREHAT
+ville,Noirmoutier-en-l'Île,ROAD_CONNECTED_ISLAND,NOIRMOUTIER
+ville,Barbâtre,ROAD_CONNECTED_ISLAND,NOIRMOUTIER
+ville,La Guérinière,ROAD_CONNECTED_ISLAND,NOIRMOUTIER
+ville,L'Épine,ROAD_CONNECTED_ISLAND,NOIRMOUTIER
+ville,Saint-Martin-de-Ré,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,La Flotte,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Rivedoux-Plage,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Sainte-Marie-de-Ré,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Le Bois-Plage-en-Ré,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,La Couarde-sur-Mer,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Loix,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Ars-en-Ré,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Saint-Clément-des-Baleines,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Les Portes-en-Ré,ROAD_CONNECTED_ISLAND,ILE_RE
+ville,Saint-Pierre-d'Oléron,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,Saint-Georges-d'Oléron,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,Dolus-d'Oléron,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,Le Château-d'Oléron,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,Saint-Trojan-les-Bains,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,Le Grand-Village-Plage,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,La Brée-les-Bains,ROAD_CONNECTED_ISLAND,ILE_OLERON
+ville,Saint-Denis-d'Oléron,ROAD_CONNECTED_ISLAND,ILE_OLERON

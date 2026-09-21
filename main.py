@@ -8,6 +8,7 @@ from fuel_fair_price.market.live import build_live_market_snapshot, load_baselin
 from fuel_fair_price.models.anomaly import score_stations
 from fuel_fair_price.models.fair_price import FairPriceInputs, compute_fair_price
 from fuel_fair_price.models.local_adjustment import add_competition_features, apply_local_adjustment
+from fuel_fair_price.models.logistics import load_logistics_overrides
 
 ROOT = Path(__file__).resolve().parent
 MAX_STATION_AGE_DAYS = 30.0
@@ -18,6 +19,7 @@ def main() -> None:
 
     baseline_by_fuel = load_baseline_margins(ROOT / "config" / "baseline_margins.csv")
     taxes = load_taxes(ROOT / "config" / "taxes.csv")
+    logistics_overrides = load_logistics_overrides(ROOT / "config" / "logistics_overrides.csv")
 
     daily_nowcast, market_snapshot = build_live_market_snapshot(ROOT, target_date=target)
     if market_snapshot.empty:
@@ -73,7 +75,10 @@ def main() -> None:
         scored["official_anchor_date"] = m["official_anchor_date"]
 
         # v0.4: estimate structural local premium and adaptive geographic peer score.
-        locally_scored, local_effects = apply_local_adjustment(scored)
+        locally_scored, local_effects = apply_local_adjustment(
+            scored,
+            logistics_overrides=logistics_overrides,
+        )
         scored_frames.append(locally_scored)
         if not local_effects.empty:
             local_effect_frames.append(local_effects)
@@ -111,15 +116,25 @@ def main() -> None:
             f"local adjustment: median structural premium={median_local_premium:+.2f} c/L | "
             f"median local residual={median_local_residual:+.2f} c/L"
         )
+        if not locally_scored.empty and "peer_confidence" in locally_scored.columns:
+            confidence_counts = locally_scored["peer_confidence"].value_counts().to_dict()
+            print(f"peer confidence: {confidence_counts}")
+        if not locally_scored.empty and "accessibility_class" in locally_scored.columns:
+            accessibility_counts = locally_scored["accessibility_class"].value_counts().to_dict()
+            print(f"accessibility classes: {accessibility_counts}")
         if freshness == "VERY_STALE":
             print("WARNING: market data are VERY_STALE; anomaly flags are disabled.")
 
         columns = [
             "id", "ville", "road_type", "price_eur_l", "updated_at", "price_age_days",
-            "fair_price_eur_l", "spread_cent_l", "structural_local_premium_cent_l",
+            "fair_price_eur_l", "spread_cent_l", "accessibility_class", "logistics_peer_group",
+            "base_structural_local_premium_cent_l", "logistics_premium_cent_l",
+            "logistics_confidence", "structural_local_premium_cent_l",
             "local_fair_price_eur_l", "local_residual_cent_l", "nearest_station_km",
             "stations_within_10km", "local_peer_radius_km", "local_peer_count",
-            "local_peer_z", "local_flag",
+            "local_peer_median_residual_cent_l", "local_excess_cent_l",
+            "local_peer_scale_cent_l", "local_anomaly_score", "peer_confidence",
+            "peer_selection_method", "local_flag",
         ]
         columns = [c for c in columns if c in locally_scored.columns]
         print(locally_scored[columns].head(10).to_string(index=False))
@@ -146,6 +161,74 @@ def main() -> None:
                 "official_anchor_age_days": m["official_anchor_age_days"],
             }
         )
+
+    # ============================================================
+    # Diagnostics des stations avec contraintes logistiques
+    # ============================================================
+
+    if scored_frames:
+        all_locally_scored = pd.concat(
+            scored_frames,
+            ignore_index=True,
+        )
+
+        logistics_aware = all_locally_scored[
+            all_locally_scored["accessibility_class"] != "MAINLAND"
+        ].copy()
+
+        print("\n=== LOGISTICS-AWARE STATIONS ===")
+
+        if logistics_aware.empty:
+            print("No non-mainland station in the current scoring sample.")
+
+        else:
+            diagnostic_columns = [
+                "id",
+                "ville",
+                "fuel",
+                "road_type",
+                "price_eur_l",
+                "accessibility_class",
+                "logistics_peer_group",
+                "fair_price_eur_l",
+                "base_structural_local_premium_cent_l",
+                "logistics_premium_cent_l",
+                "logistics_confidence",
+                "structural_local_premium_cent_l",
+                "local_fair_price_eur_l",
+                "local_residual_cent_l",
+                "local_peer_median_residual_cent_l",
+                "local_excess_cent_l",
+                "local_anomaly_score",
+                "peer_confidence",
+                "peer_selection_method",
+                "local_flag",
+            ]
+
+            diagnostic_columns = [
+                c
+                for c in diagnostic_columns
+                if c in logistics_aware.columns
+            ]
+
+            logistics_aware = logistics_aware.sort_values(
+                [
+                    "accessibility_class",
+                    "fuel",
+                    "local_anomaly_score",
+                ],
+                ascending=[True, True, False],
+            )
+
+            print(
+                logistics_aware[
+                    diagnostic_columns
+                ].to_string(index=False)
+            )
+            logistics_aware.to_csv(
+                ROOT / "output" / "logistics_aware_stations.csv",
+                index=False,
+            )
 
     output_dir = ROOT / "output"
     output_dir.mkdir(exist_ok=True)

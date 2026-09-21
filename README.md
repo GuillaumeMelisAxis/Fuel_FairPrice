@@ -87,7 +87,7 @@ nearest 5 stations -> fallback final
 Le score est robuste :
 
 ```text
-local_peer_z =
+local_anomaly_score =
     (local_residual - median(peer residuals))
     / (1.4826 * MAD(peer residuals))
 ```
@@ -95,8 +95,8 @@ local_peer_z =
 Flags par défaut :
 
 - `NORMAL`;
-- `HIGH` si `local_peer_z > 2` et résidu local > 5 c/L;
-- `VERY_HIGH` si `local_peer_z > 3` et résidu local > 10 c/L;
+- `HIGH` si `local_anomaly_score > 2` et résidu local > 5 c/L;
+- `VERY_HIGH` si `local_anomaly_score > 3` et résidu local > 10 c/L;
 - `MARKET_DATA_STALE` si la donnée marché fondamentale est trop vieille.
 
 Cette double condition évite de signaler comme anomalie une station statistiquement différente mais seulement de quelques dixièmes de centime.
@@ -108,7 +108,7 @@ La v0.4 garde simultanément :
 - `spread_cent_l` : écart au fair fondamental national;
 - `structural_local_premium_cent_l` : coût/prix local structurel estimé;
 - `local_residual_cent_l` : écart restant après ajustement local;
-- `local_peer_z` : caractère atypique par rapport aux stations proches.
+- `local_anomaly_score` : caractère atypique par rapport aux stations proches.
 
 Cela permet de distinguer :
 
@@ -183,3 +183,70 @@ Le modèle local est un modèle transversal robuste, pas un modèle causal. En p
 - les effets locaux sont recalibrés sur la coupe instantanée et devront être stabilisés historiquement dans une version ultérieure.
 
 Les scores détectent des **anomalies tarifaires**, pas une preuve juridique d'abus.
+
+## v0.4.2 peer-score stabilisation
+
+The local peer score uses at least 15 peers. Its standardized scale is floored at 2 c/L to avoid numerical explosions when nearby stations all quote identical or nearly identical prices:
+
+```
+local_excess = local_residual - median(peer_residuals)
+peer_scale   = max(1.4826 * MAD(peer_residuals), 2.0)
+local_anomaly_score = local_excess / peer_scale
+```
+
+`peer_confidence` describes the geographic strength of the comparison:
+
+- `HIGH`: at least 30 peers within 20 km;
+- `MEDIUM`: at least 15 peers within 50 km;
+- `LOW`: wider-radius or nearest-N fallback;
+- `INSUFFICIENT`: fewer than 15 usable peers.
+
+Low-confidence outliers are labelled `REVIEW_LOW_CONFIDENCE` rather than automatically treated as high-confidence anomalies.
+
+
+## v0.4.2 — Logistics-aware adjustment
+
+The public local score is now named `local_anomaly_score` rather than a Z-score.
+Its definition is unchanged statistically but is more accurately described as a
+robust peer anomaly score:
+
+```text
+local_excess = local_residual - median(peer residuals)
+peer_scale = max(1.4826 * MAD(peer residuals), 2 c/L)
+local_anomaly_score = local_excess / peer_scale
+```
+
+Stations are also assigned an `accessibility_class`:
+
+- `MAINLAND`
+- `FERRY_ISLAND`
+- `ROAD_CONNECTED_ISLAND`
+- `REMOTE_ISOLATED`
+
+Known island classifications are kept in `config/logistics_overrides.csv` so the
+registry is auditable and extendable without changing model code. The feed does
+not contain road-topology/altitude data, so the model deliberately uses
+`REMOTE_ISOLATED` rather than guessing that an isolated station is mountainous.
+
+### Logistics premium
+
+`MAINLAND` is fixed to a logistics premium of zero. Other accessibility classes
+receive an empirical cross-sectional effect relative to mainland, shrunk toward
+zero. For ferry/road-island/remote classes, negative logistics effects are floored
+at zero: constrained access may add logistics cost but is not interpreted as a
+logistics discount. The estimate is exposed through:
+
+- `logistics_premium_cent_l`
+- `logistics_train_count`
+- `logistics_confidence`
+
+This is still a v0.4.x cross-sectional correction; the v0.5 historical panel is
+needed before treating these logistics premiums as stable structural estimates.
+
+### Logistics-aware peers
+
+For `FERRY_ISLAND`, geographic distance to the mainland is not used as the main
+peer rule. The model first tries the same `logistics_peer_group` (same island),
+then other `FERRY_ISLAND` stations. Small cross-island comparisons are labelled
+`LOW` confidence and can only produce `REVIEW_LOW_CONFIDENCE`, not a high-confidence
+`VERY_HIGH` flag.
