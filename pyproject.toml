@@ -4,14 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fuel-fair-price-france"
-version = "0.1.0"
-description = "Prototype d'indice de fair price SP95 et gazole en France"
+version = "0.2.0"
+description = "Indice de fair price SP95-E5 et gazole en France"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0",
     "pandas>=2.2",
     "requests>=2.32",
+    "pypdf>=5.0",
+    "matplotlib>=3.9",
+    "openpyxl>=3.1",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

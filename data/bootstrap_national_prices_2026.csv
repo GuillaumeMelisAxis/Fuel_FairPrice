@@ -1,0 +1,15 @@
+date,fuel,national_ttc_eur_l,france_htt_eur_l,source_url,source_status
+2026-01-01,SP95,1.7131,0.7374,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-01-01,GAZOLE,1.6344,0.7545,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-02-01,SP95,1.7362,0.7566,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-02-01,GAZOLE,1.6725,0.7862,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-03-01,SP95,1.9308,0.9188,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-03-01,GAZOLE,2.0669,1.1149,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-04-01,SP95,2.0265,0.9986,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-04-01,GAZOLE,2.2389,1.2583,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-05-01,SP95,2.0776,1.0411,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-05-01,GAZOLE,2.1210,1.1600,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-08-01,SP95,2.0472,1.0158,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-08-01,GAZOLE,2.2020,1.2275,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-09-01,SP95,2.1586,1.1087,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,provisional_to_2026-09-11
+2026-09-01,GAZOLE,2.2739,1.2874,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,provisional_to_2026-09-11

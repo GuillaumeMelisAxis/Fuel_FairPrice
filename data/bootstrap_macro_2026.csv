@@ -1,0 +1,9 @@
+date,brent_usd_bbl,eurusd_usd_per_eur,brent_source,fx_source
+2026-01-01,66.60,1.1744,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-02-01,70.89,1.1824,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-03-01,103.13,1.1557,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-04-01,117.29,1.1697,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-05-01,107.14,1.1681,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-06-01,85.40,1.1516,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-07-01,83.76,1.1423,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU
+2026-08-01,91.08,1.1594,https://fred.stlouisfed.org/series/MCOILBRENTEU,https://fred.stlouisfed.org/series/EXUSEU

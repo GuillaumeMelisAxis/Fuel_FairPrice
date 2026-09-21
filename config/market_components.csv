@@ -1,1 +1,15 @@
-date,fuel,refined_quote_eur_l,observed_distribution_margin_eur_l,source_url
+date,fuel,france_htt_eur_l,refined_quote_eur_l,observed_distribution_margin_eur_l,source_url,source_status
+2026-01-01,SP95,0.7374,0.4161,0.3213,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.01.30.pdf,final
+2026-01-01,GAZOLE,0.7545,0.4695,0.2850,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.01.30.pdf,final
+2026-02-01,SP95,0.7566,0.4438,0.3128,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.02.27.pdf,final
+2026-02-01,GAZOLE,0.7862,0.5037,0.2825,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.02.27.pdf,final
+2026-03-01,SP95,0.9188,0.6456,0.2732,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.04.10.pdf,final
+2026-03-01,GAZOLE,1.1149,0.8914,0.2235,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.04.10.pdf,final
+2026-04-01,SP95,0.9986,0.7016,0.2970,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.05.29.pdf,final
+2026-04-01,GAZOLE,1.2583,0.9292,0.3291,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.05.29.pdf,final
+2026-05-01,SP95,1.0411,0.7551,0.2860,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.06.05.pdf,final
+2026-05-01,GAZOLE,1.1600,0.8420,0.3180,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.06.05.pdf,final
+2026-08-01,SP95,1.0158,0.7392,0.2766,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-08-01,GAZOLE,1.2275,0.9315,0.2960,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,final
+2026-09-01,SP95,1.1087,0.8707,0.2380,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,provisional_to_2026-09-11
+2026-09-01,GAZOLE,1.2874,1.0602,0.2272,https://www.ecologie.gouv.fr/sites/default/files/documents/NPG-2026.09.11.pdf,provisional_to_2026-09-11

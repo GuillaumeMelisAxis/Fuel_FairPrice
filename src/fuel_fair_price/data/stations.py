@@ -45,8 +45,16 @@ def clean_stations(df: pd.DataFrame) -> pd.DataFrame:
     existing = [c for c in KEEP_COLUMNS if c in out.columns]
     out = out[existing]
 
-    out["code_region"] = out["code_region"].astype("string").str.zfill(2)
-    out = out[out["code_region"].isin(MAINLAND_EX_CORSICA_REGION_CODES)]
+    out["code_region"] = (
+        pd.to_numeric(out["code_region"], errors="coerce")
+        .astype("Int64")
+        .astype("string")
+        .str.zfill(2)
+    )
+
+    out = out[
+        out["code_region"].isin(MAINLAND_EX_CORSICA_REGION_CODES)
+    ]
 
     for col in ["sp95_prix", "gazole_prix"]:
         if col in out:
