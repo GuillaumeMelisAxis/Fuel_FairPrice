@@ -2,187 +2,94 @@ from pathlib import Path
 
 import pandas as pd
 
+from fuel_fair_price.market.components import load_market_components
 from fuel_fair_price.market.daily_proxy import (
-    build_anchored_nowcast,
+    build_anchored_proxy_nowcast,
+    extend_nowcast_daily,
+    fit_brent_bridge_betas,
+    latest_daily_market_snapshot,
     load_daily_product_proxies,
 )
+from fuel_fair_price.market.eu_history import load_france_weekly_htt
 from fuel_fair_price.models.lag_selection import (
     best_filter_by_fuel,
     build_calibration_panel,
     score_filters,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _load_anchor_file() -> pd.DataFrame:
-    """
-    Load the repo's existing market_components.csv.
+def _load_or_build_weekly() -> pd.DataFrame:
+    path = ROOT / "config" / "eu_france_weekly_htt.csv"
+    if path.exists():
+        return pd.read_csv(path, parse_dates=["date"])
+    df = load_france_weekly_htt(start="2020-01-01")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False)
+    return df
 
-    Expected information:
-      date
-      fuel
-      refined quote in EUR/L
 
-    A few common column names are accepted.
-    """
-    path = ROOT / "config" / "market_components.csv"
-    df = pd.read_csv(path)
+def main() -> None:
+    weekly = _load_or_build_weekly()
+    start = (weekly["date"].min() - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+    daily = load_daily_product_proxies(start=start)
 
-    date_col = next(
-        (
-            c for c in (
-                "date",
-                "period",
-                "as_of_date",
-            )
-            if c in df.columns
-        ),
-        None,
-    )
-    fuel_col = next(
-        (
-            c for c in (
-                "fuel",
-                "carburant",
-            )
-            if c in df.columns
-        ),
-        None,
-    )
-    quote_col = next(
-        (
-            c for c in (
-                "refined_quote_eur_l",
-                "refined_product_eur_l",
-                "quote_eur_l",
-                "refined_eur_l",
-            )
-            if c in df.columns
-        ),
-        None,
-    )
+    panel = build_calibration_panel(weekly, daily)
+    scores = score_filters(panel, train_fraction=0.75, min_train=52)
+    best = best_filter_by_fuel(scores)
+    if not best:
+        raise RuntimeError("No market timing filter could be selected")
 
-    if not all((date_col, fuel_col, quote_col)):
-        raise RuntimeError(
-            "Could not identify date/fuel/refined quote columns in "
-            f"{path}. Columns are: {df.columns.tolist()}"
+    bridge_betas = fit_brent_bridge_betas(start="2023-01-01")
+
+    model_rows = []
+    for fuel, candidate in best.items():
+        row = scores[(scores["fuel"] == fuel) & (scores["candidate"] == candidate)].iloc[0]
+        model_rows.append(
+            {
+                "fuel": fuel,
+                "selected_filter": candidate,
+                "bridge_beta": bridge_betas.get(fuel, 1.0),
+                "calibration_rmse_eur_l": row["rmse_eur_l"],
+                "calibration_mae_eur_l": row["mae_eur_l"],
+                "n_train": int(row["n_train"]),
+                "n_test": int(row["n_test"]),
+            }
         )
 
-    out = df[
-        [date_col, fuel_col, quote_col]
-    ].copy()
+    model = pd.DataFrame(model_rows)
+    model.to_csv(ROOT / "config" / "market_model.csv", index=False)
 
-    out.columns = [
-        "date",
-        "fuel",
-        "refined_quote_eur_l",
-    ]
-
-    out["date"] = pd.to_datetime(
-        out["date"],
-        errors="coerce",
+    anchors = load_market_components(ROOT / "config" / "market_components.csv")
+    proxy_nowcast = build_anchored_proxy_nowcast(daily, anchors, best)
+    target = pd.Timestamp.now(tz="Europe/Paris").tz_localize(None).normalize()
+    extended = extend_nowcast_daily(
+        proxy_nowcast,
+        target_date=target,
+        bridge_betas=bridge_betas,
     )
-    out["fuel"] = (
-        out["fuel"]
-        .astype(str)
-        .str.upper()
-    )
-    out["refined_quote_eur_l"] = pd.to_numeric(
-        out["refined_quote_eur_l"],
-        errors="coerce",
-    )
+    snapshot = latest_daily_market_snapshot(extended, target_date=target)
 
-    return out.dropna()
-
-
-def main():
-    weekly_path = (
-        ROOT
-        / "config"
-        / "eu_france_weekly_htt.csv"
-    )
-
-    weekly = pd.read_csv(
-        weekly_path,
-        parse_dates=["date"],
-    )
-
-    start = (
-        weekly["date"].min()
-        - pd.Timedelta(days=30)
-    ).strftime("%Y-%m-%d")
-
-    daily = load_daily_product_proxies(
-        start=start,
-    )
-
-    panel = build_calibration_panel(
-        weekly,
-        daily,
-    )
-
-    scores = score_filters(
-        panel,
-        train_fraction=0.75,
-        min_train=52,
-    )
+    output = ROOT / "output"
+    output.mkdir(exist_ok=True)
+    scores.to_csv(output / "market_filter_scores.csv", index=False)
+    extended.to_csv(output / "daily_refined_nowcast.csv", index=False)
+    snapshot.to_csv(output / "live_market_snapshot.csv", index=False)
 
     print("\nFILTER SCORES")
     print(scores.to_string(index=False))
-
-    best = best_filter_by_fuel(scores)
-
-    print("\nBEST FILTERS")
-    for fuel, candidate in best.items():
-        print(
-            f"{fuel}: {candidate}"
-        )
-
-    if not best:
-        raise RuntimeError(
-            "No filter could be selected. "
-            "Check the EU history parsing."
-        )
-
-    anchors = _load_anchor_file()
-
-    nowcast = build_anchored_nowcast(
-        daily,
-        anchors,
-        best,
-    )
-
-    output_dir = ROOT / "output"
-    output_dir.mkdir(exist_ok=True)
-
-    scores.to_csv(
-        output_dir / "market_filter_scores.csv",
-        index=False,
-    )
-
-    nowcast.to_csv(
-        output_dir / "daily_refined_nowcast.csv",
-        index=False,
-    )
-
-    print("\nLATEST NOWCAST")
-    for fuel in ("SP95", "GAZOLE"):
-        latest = (
-            nowcast[nowcast["fuel"] == fuel]
-            .sort_values("date")
-            .iloc[-1]
-        )
-
-        print(
-            f"{fuel}: "
-            f"{latest['date'].date()} -> "
-            f"{latest['refined_nowcast_eur_l']:.4f} EUR/L "
-            f"(anchor {latest['anchor_date'].date()} = "
-            f"{latest['official_anchor_eur_l']:.4f}, "
-            f"filter={latest['selected_filter']})"
-        )
+    print("\nMARKET MODEL")
+    print(model.to_string(index=False))
+    print("\nLIVE DAILY NOWCAST")
+    cols = [
+        "fuel", "date", "refined_nowcast_eur_l", "market_mode", "bridge_source",
+        "effective_market_date", "product_proxy_date", "official_anchor_date",
+        "market_freshness", "bridge_span_days", "official_anchor_age_days",
+    ]
+    # freshness dataclass uses 'status', rename only for human-readable output.
+    view = snapshot.rename(columns={"status": "market_freshness"})
+    print(view[[c for c in cols if c in view.columns]].to_string(index=False))
 
 
 if __name__ == "__main__":

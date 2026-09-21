@@ -1,0 +1,3 @@
+date,fuel,refined_nowcast_eur_l,baseline_margin_eur_l,fair_price_eur_l,median_station_price_eur_l,median_spread_cent_l,stations_scored,market_mode,market_freshness,market_data_date,product_proxy_date,official_anchor_date,bridge_span_days,official_anchor_age_days
+2026-09-21,SP95,0.8786383604760066,0.257,2.1910060325712077,2.239,4.799396742879214,2540,BRENT_FX_BRIDGE,CURRENT,2026-09-21,2026-09-15,2026-09-11,6,10
+2026-09-21,GAZOLE,1.0819656513849443,0.219,2.290158781661933,2.427,13.684121833806717,8073,BRENT_FX_BRIDGE,CURRENT,2026-09-21,2026-09-15,2026-09-11,6,10

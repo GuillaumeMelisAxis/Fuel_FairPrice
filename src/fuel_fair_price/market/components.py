@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -12,6 +13,21 @@ REQUIRED_COLUMNS = {
 }
 
 
+def _derive_effective_market_date(row: pd.Series) -> pd.Timestamp:
+    """Best available date represented by a DGEC market row.
+
+    For provisional rows such as ``provisional_to_2026-09-11`` the explicit
+    cutoff is the correct live anchor date.  Older finalized monthly rows keep
+    their nominal date because they are mainly used for historical analysis,
+    not for today's live bridge.
+    """
+    status = str(row.get("source_status", ""))
+    match = re.search(r"provisional_to_(\d{4}-\d{2}-\d{2})", status)
+    if match:
+        return pd.Timestamp(match.group(1))
+    return pd.Timestamp(row["date"])
+
+
 def load_market_components(path: str | Path) -> pd.DataFrame:
     """Load DGEC refined-product quotations and transport/distribution margins."""
     df = pd.read_csv(path)
@@ -21,7 +37,8 @@ def load_market_components(path: str | Path) -> pd.DataFrame:
 
     df["date"] = pd.to_datetime(df["date"])
     df["fuel"] = df["fuel"].str.upper()
-    return df.sort_values(["fuel", "date"]).reset_index(drop=True)
+    df["effective_market_date"] = df.apply(_derive_effective_market_date, axis=1)
+    return df.sort_values(["fuel", "effective_market_date", "date"]).reset_index(drop=True)
 
 
 def add_normal_distribution_margin(
@@ -30,15 +47,10 @@ def add_normal_distribution_margin(
     min_periods: int = 3,
     baseline_by_fuel: dict[str, float] | None = None,
 ) -> pd.DataFrame:
-    """Estimate a lagged robust 'normal' transport/distribution margin.
+    """Estimate a lagged robust normal transport/distribution margin.
 
-    The current observation is deliberately excluded.  At date t, the fair-price
-    benchmark may only use margins observed strictly before t.  This prevents a
-    contemporaneous margin spike from mechanically redefining itself as normal.
-
-    ``baseline_by_fuel`` is used until ``min_periods`` prior observations are
-    available.  It is useful for bootstrapping from the previous year's official
-    DGEC average margin.
+    The current observation is excluded.  ``baseline_by_fuel`` is used until
+    enough prior observations are available.
     """
     out = df.copy().sort_values(["fuel", "date"]).reset_index(drop=True)
     out["normal_distribution_margin_eur_l"] = float("nan")
