@@ -7,6 +7,7 @@ from fuel_fair_price.data.taxes import get_tax_row, load_taxes
 from fuel_fair_price.market.live import build_live_market_snapshot, load_baseline_margins
 from fuel_fair_price.models.anomaly import score_stations
 from fuel_fair_price.models.fair_price import FairPriceInputs, compute_fair_price
+from fuel_fair_price.models.local_adjustment import add_competition_features, apply_local_adjustment
 
 ROOT = Path(__file__).resolve().parent
 MAX_STATION_AGE_DAYS = 30.0
@@ -31,6 +32,7 @@ def main() -> None:
 
     output_rows = []
     scored_frames = []
+    local_effect_frames = []
 
     print(f"INDEX DATE: {target.date()}")
     print()
@@ -55,6 +57,9 @@ def main() -> None:
         )
 
         all_fuel = stations[stations["fuel"] == fuel].copy()
+        # Competition is a physical/local-market feature, so compute it on the full
+        # currently reported fuel universe before applying the 30-day price-age filter.
+        all_fuel = add_competition_features(all_fuel)
         scoring_sample = all_fuel[all_fuel["price_age_days"] <= MAX_STATION_AGE_DAYS].copy()
 
         freshness = str(m["market_freshness"])
@@ -66,10 +71,23 @@ def main() -> None:
         scored["market_mode"] = m["market_mode"]
         scored["market_data_date"] = m["effective_market_date"]
         scored["official_anchor_date"] = m["official_anchor_date"]
-        scored_frames.append(scored)
 
-        median_price = float(scored["price_eur_l"].median()) if not scored.empty else float("nan")
-        median_spread = float(scored["spread_cent_l"].median()) if not scored.empty else float("nan")
+        # v0.4: estimate structural local premium and adaptive geographic peer score.
+        locally_scored, local_effects = apply_local_adjustment(scored)
+        scored_frames.append(locally_scored)
+        if not local_effects.empty:
+            local_effect_frames.append(local_effects)
+
+        median_price = float(locally_scored["price_eur_l"].median()) if not locally_scored.empty else float("nan")
+        median_spread = float(locally_scored["spread_cent_l"].median()) if not locally_scored.empty else float("nan")
+        median_local_premium = (
+            float(locally_scored["structural_local_premium_cent_l"].median())
+            if not locally_scored.empty else float("nan")
+        )
+        median_local_residual = (
+            float(locally_scored["local_residual_cent_l"].median())
+            if not locally_scored.empty else float("nan")
+        )
 
         print(f"=== {fuel} ===")
         print(
@@ -87,16 +105,24 @@ def main() -> None:
             f"median spread = {median_spread:+.2f} c/L"
         )
         print(
-            f"stations raw={len(all_fuel):,} | scored (<= {MAX_STATION_AGE_DAYS:.0f}d)={len(scored):,}"
+            f"stations raw={len(all_fuel):,} | scored (<= {MAX_STATION_AGE_DAYS:.0f}d)={len(locally_scored):,}"
+        )
+        print(
+            f"local adjustment: median structural premium={median_local_premium:+.2f} c/L | "
+            f"median local residual={median_local_residual:+.2f} c/L"
         )
         if freshness == "VERY_STALE":
             print("WARNING: market data are VERY_STALE; anomaly flags are disabled.")
 
         columns = [
-            "id", "ville", "price_eur_l", "updated_at", "price_age_days",
-            "fair_price_eur_l", "spread_cent_l", "anomaly_z", "flag",
+            "id", "ville", "road_type", "price_eur_l", "updated_at", "price_age_days",
+            "fair_price_eur_l", "spread_cent_l", "structural_local_premium_cent_l",
+            "local_fair_price_eur_l", "local_residual_cent_l", "nearest_station_km",
+            "stations_within_10km", "local_peer_radius_km", "local_peer_count",
+            "local_peer_z", "local_flag",
         ]
-        print(scored[columns].head(10).to_string(index=False))
+        columns = [c for c in columns if c in locally_scored.columns]
+        print(locally_scored[columns].head(10).to_string(index=False))
         print()
 
         output_rows.append(
@@ -108,7 +134,9 @@ def main() -> None:
                 "fair_price_eur_l": fair,
                 "median_station_price_eur_l": median_price,
                 "median_spread_cent_l": median_spread,
-                "stations_scored": len(scored),
+                "stations_scored": len(locally_scored),
+                "median_structural_local_premium_cent_l": median_local_premium,
+                "median_local_residual_cent_l": median_local_residual,
                 "market_mode": m["market_mode"],
                 "market_freshness": freshness,
                 "market_data_date": m["effective_market_date"],
@@ -125,6 +153,8 @@ def main() -> None:
     market_snapshot.to_csv(output_dir / "live_market_snapshot.csv", index=False)
     if scored_frames:
         pd.concat(scored_frames, ignore_index=True).to_csv(output_dir / "live_station_scores.csv", index=False)
+    if local_effect_frames:
+        pd.concat(local_effect_frames, ignore_index=True).to_csv(output_dir / "local_adjustment_effects.csv", index=False)
     daily_nowcast.to_csv(output_dir / "daily_refined_nowcast.csv", index=False)
 
 

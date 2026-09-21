@@ -1,24 +1,124 @@
-# Fuel Fair Price France — v0.3
+# Fuel Fair Price France — v0.4
 
 Prototype Python d'indice de **fair price SP95-E5 / Gazole** pour la France métropolitaine hors Corse.
 
-## Ce que fait la v0.3
+## Architecture de l'indice
 
-Le prix théorique reste :
+La v0.4 sépare désormais trois niveaux :
 
 ```text
-fair price = (refined market component + normal distribution margin + excise) * (1 + VAT)
+1. Fair price national fondamental
+2. Prime locale structurelle
+3. Anomalie relative aux stations géographiquement proches
 ```
 
-Mais la composante raffinée est maintenant **quotidienne et auditée** :
+Le fair national reste :
 
-1. Niveau officiel : dernière cotation raffinée DGEC disponible.
-2. Dynamique principale : proxy raffiné quotidien public (essence / diesel NY Harbor via EIA/FRED).
-3. Si ce proxy n'est plus à jour : **bridge Brent futures + EUR/USD** jusqu'à la date courante.
-4. Le bridge ne change jamais le niveau d'ancrage DGEC ; il prolonge uniquement la variation depuis la dernière observation produit.
-5. Si la source live Yahoo est indisponible, le code retombe sur FRED et la fraîcheur passe automatiquement en `STALE` / `VERY_STALE` selon l'âge réel.
+```text
+fair_national = (refined market component + normal distribution margin + excise) * (1 + VAT)
+```
 
-La v0.3 corrige aussi le timestamp stations : le champ brut `prix.@maj` est interprété directement comme heure `Europe/Paris`, au lieu d'utiliser les champs dérivés `*_maj` qui introduisaient un décalage de deux heures dans le flux observé.
+La composante raffinée utilise la logique v0.3 : ancrage DGEC, proxy raffiné quotidien, puis bridge Brent + EUR/USD si le proxy produit n'est plus à jour.
+
+## Local adjustment v0.4
+
+### 1. Variables locales
+
+La v0.4 reconstruit, pour chaque carburant :
+
+- type de station : route / autoroute (`pop` officiel : `R` / `A`);
+- région;
+- département;
+- distance géodésique au concurrent le plus proche;
+- nombre de stations vendant le même carburant dans un rayon de 2, 5, 10, 20 et 50 km;
+- bucket de concurrence locale;
+- bucket d'isolement.
+
+Les distances sont des distances Haversine à vol d'oiseau, pas des distances routières.
+
+### 2. Prime locale structurelle
+
+Le modèle n'apprend **pas** le niveau national du spread. Il travaille sur :
+
+```text
+relative_spread_i = spread_i - median_national_spread
+```
+
+Ainsi, si tout le marché gazole est +13 c/L au-dessus du fair national, ce +13 c/L ne devient pas une "prime locale normale".
+
+La prime locale est un modèle additif robuste :
+
+```text
+local_premium
+  = region_effect
+  + department_effect
+  + road_type_effect
+  + competition_effect
+  + isolation_effect
+```
+
+Les effets sont estimés par backfitting sur des médianes robustes, avec shrinkage vers zéro pour les groupes de petite taille. Les observations extrêmes (|robust z| > 3 par défaut) ne servent pas à calibrer les effets locaux.
+
+La prime finale est recentrée pour avoir une médiane nationale nulle.
+
+```text
+local_fair_i = fair_national + structural_local_premium_i
+```
+
+### 3. Score de voisinage
+
+Après l'ajustement structurel :
+
+```text
+local_residual_i = station_price_i - local_fair_i
+```
+
+Chaque station est ensuite comparée à ses voisins géographiques sur ce résidu ajusté.
+
+Le peer radius est adaptatif :
+
+```text
+10 km -> si au moins 5 pairs
+20 km -> sinon
+50 km -> sinon
+nearest 5 stations -> fallback final
+```
+
+Le score est robuste :
+
+```text
+local_peer_z =
+    (local_residual - median(peer residuals))
+    / (1.4826 * MAD(peer residuals))
+```
+
+Flags par défaut :
+
+- `NORMAL`;
+- `HIGH` si `local_peer_z > 2` et résidu local > 5 c/L;
+- `VERY_HIGH` si `local_peer_z > 3` et résidu local > 10 c/L;
+- `MARKET_DATA_STALE` si la donnée marché fondamentale est trop vieille.
+
+Cette double condition évite de signaler comme anomalie une station statistiquement différente mais seulement de quelques dixièmes de centime.
+
+## Pourquoi conserver les deux spreads ?
+
+La v0.4 garde simultanément :
+
+- `spread_cent_l` : écart au fair fondamental national;
+- `structural_local_premium_cent_l` : coût/prix local structurel estimé;
+- `local_residual_cent_l` : écart restant après ajustement local;
+- `local_peer_z` : caractère atypique par rapport aux stations proches.
+
+Cela permet de distinguer :
+
+```text
+marché national cher
+vs
+zone locale structurellement chère
+vs
+station individuellement atypique
+```
 
 ## Fraîcheur marché
 
@@ -32,15 +132,13 @@ Chaque fair price expose :
 - `bridge_span_days`;
 - `market_freshness`: `CURRENT`, `STALE`, `VERY_STALE`.
 
-Règles par défaut :
-
-- `CURRENT`: observation marché <= 1 jour ouvré, bridge <= 7 jours, ancrage DGEC <= 21 jours;
-- `STALE`: observation <= 3 jours ouvrés, bridge <= 14 jours, ancrage <= 35 jours;
-- `VERY_STALE`: au-delà. Dans ce cas le fair price reste affiché, mais les flags d'anomalie sont remplacés par `MARKET_DATA_STALE`.
+Si `market_freshness == VERY_STALE`, les flags d'anomalie sont désactivés.
 
 ## Données stations
 
-Les prix SP95/Gazole et leurs timestamps sont reconstruits depuis le champ brut officiel `prix` (`@nom`, `@valeur`, `@maj`). Les prix vieux de plus de 30 jours restent dans les données brutes mais ne participent pas au scoring live.
+Les prix SP95/Gazole et leurs timestamps sont reconstruits depuis le champ brut officiel `prix` (`@nom`, `@valeur`, `@maj`) en timezone `Europe/Paris`.
+
+Les prix vieux de plus de 30 jours restent accessibles dans le flux brut mais ne participent pas au scoring live.
 
 ## Installation
 
@@ -50,27 +148,12 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-## Calibration du filtre marché
-
-La Commission européenne fournit l'historique hebdomadaire français HTT. Pour le reconstruire :
+## Calibration marché
 
 ```powershell
 python scripts/build_eu_market_history.py
-```
-
-Puis :
-
-```powershell
 python scripts/run_market_calibration.py
 ```
-
-Cette commande :
-
-- compare proxy brut / MA3 / MA5 / MA7 hors échantillon;
-- choisit un filtre par carburant;
-- calibre la sensibilité de bridge à Brent;
-- met à jour `config/market_model.csv`;
-- produit un nowcast quotidien et son statut de fraîcheur.
 
 ## Lancer l'indice live
 
@@ -78,19 +161,25 @@ Cette commande :
 python main.py
 ```
 
-Sorties :
+Sorties principales :
 
 ```text
 output/live_index_summary.csv
 output/live_market_snapshot.csv
 output/live_station_scores.csv
+output/local_adjustment_effects.csv
 output/daily_refined_nowcast.csv
 ```
 
-## Interprétation
+`local_adjustment_effects.csv` permet d'auditer les primes apprises par région, département, route/autoroute, concurrence et isolement.
 
-`spread_cent_l` mesure l'écart au fair price fondamental.
+## Limites de la v0.4
 
-`anomaly_z` mesure le caractère atypique de la station relativement à ses pairs (`region x road_type x fuel`).
+Le modèle local est un modèle transversal robuste, pas un modèle causal. En particulier :
 
-Ces métriques détectent des **anomalies tarifaires**, pas une preuve juridique d'abus.
+- les distances sont géodésiques et ne capturent pas les temps de trajet;
+- l'insularité n'est pas codée manuellement : elle est approchée via l'isolement géographique et la densité de concurrents;
+- l'enseigne n'est pas disponible dans l'Open Data officiel;
+- les effets locaux sont recalibrés sur la coupe instantanée et devront être stabilisés historiquement dans une version ultérieure.
+
+Les scores détectent des **anomalies tarifaires**, pas une preuve juridique d'abus.
