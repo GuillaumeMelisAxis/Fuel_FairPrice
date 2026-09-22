@@ -138,3 +138,55 @@ def test_combine_index_series_builds_market_tension_and_fair_index():
     assert np.isclose(out.iloc[1]["market_tension_cent_l"], 20.0)
     assert np.isclose(out.iloc[0]["fundamental_fair_index"], 100.0)
     assert np.isclose(out.iloc[1]["fundamental_fair_index"], 100.0 * 2.0 / 1.9)
+
+
+def test_live_market_snapshot_overrides_live_refined_quote_metadata():
+    observed = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-09-22"]),
+            "fuel": ["GAZOLE"],
+            "observed_median_price_eur_l": [2.42],
+            "observed_price_index": [140.0],
+        }
+    )
+    fair = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-09-22"]),
+            "fuel": ["GAZOLE"],
+            "fundamental_fair_price_eur_l": [2.20],
+            "refined_quote_est_eur_l": [1.06],
+            "refined_quote_source": ["DGEC_ANCHORED_PROXY"],
+            "fundamental_fair_confidence": ["MEDIUM"],
+        }
+    )
+    anomaly = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-09-22"]),
+            "fuel": ["GAZOLE"],
+            "local_anomaly_rate_pct": [5.0],
+        }
+    )
+    live_summary = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-09-22"]),
+            "fuel": ["GAZOLE"],
+            "fair_price_eur_l": [2.34],
+        }
+    )
+    live_market = pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-09-22"]),
+            "fuel": ["GAZOLE"],
+            "refined_nowcast_eur_l": [1.121],
+        }
+    )
+    out = combine_index_series(
+        observed,
+        fair,
+        anomaly,
+        live_summary=live_summary,
+        live_market_snapshot=live_market,
+    )
+    assert np.isclose(out.iloc[0]["fundamental_fair_price_eur_l"], 2.34)
+    assert np.isclose(out.iloc[0]["refined_quote_est_eur_l"], 1.121)
+    assert out.iloc[0]["refined_quote_source"] == "LIVE_V0_5_1"

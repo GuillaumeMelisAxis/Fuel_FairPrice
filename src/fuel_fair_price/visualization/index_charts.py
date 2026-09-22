@@ -90,3 +90,37 @@ def plot_local_anomaly_rate(index_series: pd.DataFrame, output: str | Path) -> P
     fig.savefig(output, dpi=170)
     plt.close(fig)
     return output
+
+
+def plot_observed_and_fair_indices(index_series: pd.DataFrame, output: str | Path) -> Path:
+    """Plot SP95/GAZOLE observed and fundamental-fair indices on one chart."""
+    fig, ax = plt.subplots(figsize=(12, 6.2))
+    for fuel in ("SP95", "GAZOLE"):
+        g = _fuel_frame(index_series, fuel)
+        if g.empty:
+            continue
+        ax.plot(
+            g["date"],
+            g["observed_price_index"],
+            marker="o",
+            label=f"{fuel} observed",
+        )
+        ax.plot(
+            g["date"],
+            g["fundamental_fair_index"],
+            marker="o",
+            linestyle="--",
+            label=f"{fuel} fair",
+        )
+    ax.axhline(100.0, linewidth=1.0, alpha=0.45)
+    ax.set_title("Observed vs fundamental fuel-price indices — base 100")
+    ax.set_ylabel("Index (base 100 at first observation)")
+    ax.grid(True, alpha=0.25)
+    ax.legend(ncol=2)
+    fig.autofmt_xdate()
+    fig.tight_layout()
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output, dpi=170)
+    plt.close(fig)
+    return output

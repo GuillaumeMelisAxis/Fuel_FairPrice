@@ -1,6 +1,6 @@
-# Fuel Fair Price France — v0.6
+# Fuel Fair Price France — v0.6.1
 
-v0.6 freezes the validated v0.5.1 fair-price/local model and adds the historical
+v0.6.1 keeps the validated v0.5.1 fair-price/local model frozen and extends the historical
 visual index layer intended to be the first interface seen by a non-technical
 user.
 
@@ -324,3 +324,18 @@ station count and dispersion) and rebased to 100 at a chosen base date. A separa
 fundamental/fair-price index can then be added once the historical refined-product component,
 taxes and margin convention are reconstructed point-in-time. The two series should remain
 separate so observed prices are never retrospectively rewritten by a later model calibration.
+
+
+## v0.6.1 dashboard
+
+The dashboard now includes a single four-series base-100 chart comparing observed and fundamental SP95/Gazole indices, plus an interactive France station map colored by `local_excess_cent_l`. Use the map layer control to switch between Gazole and SP95. Grey points are stale, low-confidence or unassessed. The map is an economic anomaly indicator and is not a legal determination of abusive pricing.
+
+Run:
+
+```powershell
+python -m pip install -e .
+python main.py
+python scripts/build_historical_index.py
+```
+
+Then open `output/index/index_dashboard.html`.

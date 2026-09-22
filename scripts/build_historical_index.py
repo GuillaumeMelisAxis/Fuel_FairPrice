@@ -20,10 +20,12 @@ from fuel_fair_price.market.components import load_market_components
 from fuel_fair_price.market.daily_proxy import load_daily_product_proxies
 from fuel_fair_price.market.eu_history import load_france_weekly_prices
 from fuel_fair_price.models.historical_local import load_historical_model
+from fuel_fair_price.visualization.station_map import build_station_map
 from fuel_fair_price.visualization.index_charts import (
     plot_local_anomaly_rate,
     plot_market_tension,
     plot_observed_indices,
+    plot_observed_and_fair_indices,
     plot_observed_vs_fair,
 )
 
@@ -32,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build the v0.6 historical visual fuel index."
+        description="Build the v0.6.1 historical visual fuel index and station map."
     )
     parser.add_argument(
         "--panel",
@@ -155,7 +157,20 @@ def _append_live_station_prices(panel: pd.DataFrame) -> tuple[pd.DataFrame, pd.D
     return station_history, live_scores, live_summary
 
 
-def _write_dashboard(index_series: pd.DataFrame, output_dir: Path) -> Path:
+def _load_live_market_snapshot() -> pd.DataFrame | None:
+    path = ROOT / "output" / "live_market_snapshot.csv"
+    if not path.exists():
+        return None
+    frame = pd.read_csv(path)
+    if frame.empty:
+        return None
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"]).dt.normalize()
+    frame["fuel"] = frame["fuel"].astype(str).str.upper()
+    return frame
+
+
+def _write_dashboard(index_series: pd.DataFrame, output_dir: Path, *, map_available: bool) -> Path:
     latest = (
         index_series.sort_values("date")
         .groupby("fuel", as_index=False)
@@ -163,18 +178,29 @@ def _write_dashboard(index_series: pd.DataFrame, output_dir: Path) -> Path:
         .sort_values("fuel")
     )
 
-    rows = []
+    cards = []
     for _, r in latest.iterrows():
-        rows.append(
-            "<tr>"
-            f"<td>{r['fuel']}</td>"
-            f"<td>{r['observed_median_price_eur_l']:.3f} €</td>"
-            f"<td>{r['fundamental_fair_price_eur_l']:.3f} €</td>"
-            f"<td>{r['market_tension_cent_l']:+.1f} c/L</td>"
-            f"<td>{r['local_anomaly_rate_pct']:.1f}%</td>"
-            f"<td>{r['observed_price_index']:.1f}</td>"
-            "</tr>"
+        cards.append(
+            f"""<div class="metric-card">
+              <div class="fuel">{r['fuel']}</div>
+              <div class="price">{r['observed_median_price_eur_l']:.3f} €/L</div>
+              <div class="metric"><span>Fundamental fair</span><b>{r['fundamental_fair_price_eur_l']:.3f} €/L</b></div>
+              <div class="metric"><span>Market tension</span><b>{r['market_tension_cent_l']:+.1f} c/L</b></div>
+              <div class="metric"><span>Local anomaly rate</span><b>{r['local_anomaly_rate_pct']:.1f}%</b></div>
+              <div class="metric"><span>Observed index</span><b>{r['observed_price_index']:.1f}</b></div>
+            </div>"""
         )
+
+    map_section = ""
+    if map_available:
+        map_section = """
+        <section>
+          <h2>Station-level local price excess</h2>
+          <p class="section-sub">Interactive station map. Green stations are cheap relative to their local fair benchmark; red stations are expensive relative to comparable local peers. Use the layer control to switch fuel. Grey points are stale, low-confidence or unassessed.</p>
+          <div class="map-card"><iframe src="station_map.html" title="Fuel station anomaly map"></iframe></div>
+          <p class="disclaimer">The map is an economic anomaly indicator, not a legal finding of abusive pricing.</p>
+        </section>
+        """
 
     html = f"""<!doctype html>
 <html lang="en">
@@ -183,36 +209,55 @@ def _write_dashboard(index_series: pd.DataFrame, output_dir: Path) -> Path:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fuel Fair Price Index — France</title>
 <style>
-body {{ font-family: Arial, sans-serif; max-width: 1180px; margin: 32px auto; padding: 0 20px; color: #202124; }}
-h1 {{ margin-bottom: 4px; }}
-.sub {{ color: #5f6368; margin-bottom: 24px; }}
-table {{ border-collapse: collapse; width: 100%; margin: 18px 0 28px; }}
-th, td {{ border-bottom: 1px solid #ddd; padding: 10px; text-align: right; }}
-th:first-child, td:first-child {{ text-align: left; }}
-.grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }}
-.card {{ border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px; }}
-.card img {{ width: 100%; height: auto; }}
-.note {{ margin-top: 24px; color: #5f6368; font-size: 0.93rem; line-height: 1.45; }}
-@media (max-width: 800px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+:root {{ --text:#202124; --muted:#667085; --border:#e4e7ec; --bg:#f8fafc; }}
+* {{ box-sizing:border-box; }}
+body {{ font-family:Arial,sans-serif; max-width:1280px; margin:0 auto; padding:32px 22px 54px; color:var(--text); background:white; }}
+h1 {{ margin:0 0 6px; font-size:2rem; }}
+h2 {{ margin:36px 0 6px; }}
+.sub,.section-sub,.note,.disclaimer {{ color:var(--muted); line-height:1.5; }}
+.summary {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin:24px 0 30px; }}
+.metric-card {{ border:1px solid var(--border); border-radius:14px; padding:18px; background:#fff; box-shadow:0 1px 3px rgba(16,24,40,.04); }}
+.fuel {{ font-size:.9rem; color:var(--muted); font-weight:700; letter-spacing:.08em; }}
+.price {{ font-size:2rem; font-weight:700; margin:5px 0 15px; }}
+.metric {{ display:flex; justify-content:space-between; gap:14px; padding:5px 0; border-top:1px solid #f0f1f3; font-size:.94rem; }}
+.metric span {{ color:var(--muted); }}
+.hero-card,.card,.map-card {{ border:1px solid var(--border); border-radius:14px; padding:12px; background:#fff; box-shadow:0 1px 3px rgba(16,24,40,.04); }}
+.hero-card img,.card img {{ width:100%; height:auto; display:block; }}
+.grid {{ display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:18px; }}
+.map-card {{ padding:0; overflow:hidden; margin-top:14px; }}
+.map-card iframe {{ width:100%; height:720px; border:0; display:block; }}
+.note {{ margin-top:30px; font-size:.9rem; border-top:1px solid var(--border); padding-top:18px; }}
+.disclaimer {{ font-size:.85rem; }}
+@media (max-width:820px) {{ .summary,.grid {{ grid-template-columns:1fr; }} .map-card iframe {{ height:620px; }} }}
 </style>
 </head>
 <body>
 <h1>Fuel Fair Price Index — France</h1>
-<div class="sub">v0.6 visual index. Observed index is model-free; fair value and anomaly-rate series are model/version dependent and explicitly sourced in the CSV.</div>
-<table>
-<thead><tr><th>Fuel</th><th>Observed</th><th>Fundamental fair</th><th>Market tension</th><th>Local anomaly rate</th><th>Observed index</th></tr></thead>
-<tbody>{''.join(rows)}</tbody>
-</table>
-<div class="grid">
-<div class="card"><img src="sp95_observed_vs_fair.png" alt="SP95 observed versus fair"></div>
-<div class="card"><img src="gazole_observed_vs_fair.png" alt="Gazole observed versus fair"></div>
-<div class="card"><img src="fuel_indices_base100.png" alt="Fuel indices base 100"></div>
-<div class="card"><img src="market_tension.png" alt="Market tension"></div>
-<div class="card"><img src="local_anomaly_rate.png" alt="Local anomaly rate"></div>
-</div>
+<div class="sub">v0.6.1 dashboard. Observed indices are model-free; fair-value and local-anomaly series are explicitly model/version dependent.</div>
+<div class="summary">{''.join(cards)}</div>
+
+<section>
+  <h2>Observed vs fundamental indices</h2>
+  <p class="section-sub">SP95 and Gazole on one base-100 chart. Solid lines are observed chained-station indices; dashed lines are fundamental fair-value indices.</p>
+  <div class="hero-card"><img src="fuel_observed_vs_fair_base100.png" alt="SP95 and Gazole observed versus fundamental fair indices"></div>
+</section>
+
+{map_section}
+
+<section>
+  <h2>Detailed views</h2>
+  <div class="grid">
+    <div class="card"><img src="sp95_observed_vs_fair.png" alt="SP95 observed versus fair"></div>
+    <div class="card"><img src="gazole_observed_vs_fair.png" alt="Gazole observed versus fair"></div>
+    <div class="card"><img src="market_tension.png" alt="Market tension"></div>
+    <div class="card"><img src="local_anomaly_rate.png" alt="Local anomaly rate"></div>
+    <div class="card"><img src="fuel_indices_base100.png" alt="Observed fuel indices base 100"></div>
+  </div>
+</section>
+
 <div class="note">
-Observed price index: chained median station-to-station price relatives using stations present on consecutive dates.<br>
-Fundamental fair: DGEC refined quotations when available; otherwise DGEC-anchored public product-proxy reconstruction. Historical tax wedge comes from EU Weekly Oil Bulletin France TTC/HTT data.<br>
+<b>Method notes.</b> Observed price index: chained median station-to-station price relatives using stations present on consecutive dates.
+Fundamental fair: DGEC refined quotations when available; otherwise DGEC-anchored public product-proxy reconstruction. Historical tax wedge comes from EU Weekly Oil Bulletin France TTC/HTT data.
 Local anomaly rate: retrospective application of the frozen v0.5.1 local model to each historical station snapshot.
 </div>
 </body></html>"""
@@ -220,13 +265,13 @@ Local anomaly rate: retrospective application of the frozen v0.5.1 local model t
     path.write_text(html, encoding="utf-8")
     return path
 
-
 def main() -> None:
     args = _parse_args()
     panel = _load_panel(Path(args.panel))
     model, meta, _ = _load_model()
 
     station_history, live_scores, live_summary = _append_live_station_prices(panel)
+    live_market_snapshot = _load_live_market_snapshot()
     index_cfg = HistoricalIndexConfig(min_common_stations=int(args.min_common_stations))
 
     print("Building composition-resistant observed indices...")
@@ -270,6 +315,7 @@ def main() -> None:
         fair,
         anomaly,
         live_summary=live_summary,
+        live_market_snapshot=live_market_snapshot,
     )
 
     output_dir = ROOT / "output" / "index"
@@ -280,12 +326,17 @@ def main() -> None:
     plot_observed_vs_fair(series, "SP95", output_dir / "sp95_observed_vs_fair.png")
     plot_observed_vs_fair(series, "GAZOLE", output_dir / "gazole_observed_vs_fair.png")
     plot_observed_indices(series, output_dir / "fuel_indices_base100.png")
+    plot_observed_and_fair_indices(series, output_dir / "fuel_observed_vs_fair_base100.png")
     plot_market_tension(series, output_dir / "market_tension.png")
     plot_local_anomaly_rate(series, output_dir / "local_anomaly_rate.png")
-    dashboard = _write_dashboard(series, output_dir)
+    map_available = live_scores is not None and not live_scores.empty
+    if map_available:
+        print("Building interactive station map...")
+        build_station_map(live_scores, output_dir / "station_map.html")
+    dashboard = _write_dashboard(series, output_dir, map_available=map_available)
 
     metadata = {
-        "version": "0.6.0",
+        "version": "0.6.1",
         "observed_index_method": "CHAINED_MEDIAN_MATCHED_STATION_RELATIVES",
         "base_value": float(index_cfg.base_value),
         "local_model_version": "v0.5.1_final",
@@ -294,6 +345,8 @@ def main() -> None:
         "historical_tax_method": "EU_WEEKLY_TTC_HTT_WEDGE",
         "first_date": str(pd.Timestamp(series["date"].min()).date()),
         "last_date": str(pd.Timestamp(series["date"].max()).date()),
+        "station_map_metric": "local_excess_cent_l",
+        "station_map_interpretation": "ECONOMIC_ANOMALY_NOT_LEGAL_FINDING",
     }
     (output_dir / "index_metadata.json").write_text(
         json.dumps(metadata, indent=2), encoding="utf-8"

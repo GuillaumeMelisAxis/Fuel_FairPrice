@@ -406,6 +406,7 @@ def combine_index_series(
     anomaly: pd.DataFrame,
     *,
     live_summary: pd.DataFrame | None = None,
+    live_market_snapshot: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     out = observed.merge(fair, on=["date", "fuel"], how="left")
     out = out.merge(anomaly, on=["date", "fuel"], how="left")
@@ -421,6 +422,18 @@ def combine_index_series(
         out.loc[mask, "fundamental_fair_price_eur_l"] = live_values[mask]
         out.loc[mask, "refined_quote_source"] = "LIVE_V0_5_1"
         out.loc[mask, "fundamental_fair_confidence"] = "HIGH"
+
+    if live_market_snapshot is not None and not live_market_snapshot.empty:
+        market = live_market_snapshot.copy()
+        if "date" in market.columns:
+            market["date"] = pd.to_datetime(market["date"]).dt.normalize()
+        market["fuel"] = market["fuel"].astype(str).str.upper()
+        if "refined_nowcast_eur_l" in market.columns:
+            quote_map = market.set_index(["date", "fuel"])["refined_nowcast_eur_l"].to_dict()
+            market_keys = list(zip(out["date"], out["fuel"]))
+            market_values = pd.Series([quote_map.get(k, np.nan) for k in market_keys], index=out.index)
+            market_mask = market_values.notna()
+            out.loc[market_mask, "refined_quote_est_eur_l"] = market_values[market_mask]
 
     out["market_tension_cent_l"] = 100.0 * (
         out["observed_median_price_eur_l"] - out["fundamental_fair_price_eur_l"]
