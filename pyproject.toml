@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fuel-fair-price-france"
-version = "0.5.1"
+version = "0.6.0"
 description = "Indice de fair price SP95-E5 et gazole en France"
 requires-python = ">=3.11"
 dependencies = [

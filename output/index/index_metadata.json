@@ -1,0 +1,11 @@
+{
+  "version": "0.6.0",
+  "observed_index_method": "CHAINED_MEDIAN_MATCHED_STATION_RELATIVES",
+  "base_value": 100.0,
+  "local_model_version": "v0.5.1_final",
+  "local_anomaly_series": "RETROSPECTIVE_MODEL_DEPENDENT",
+  "fundamental_fair_method": "DGEC_OFFICIAL_OR_DGEC_ANCHORED_PRODUCT_PROXY",
+  "historical_tax_method": "EU_WEEKLY_TTC_HTT_WEDGE",
+  "first_date": "2025-01-31",
+  "last_date": "2026-09-22"
+}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuel Fair Price Index — France</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 1180px; margin: 32px auto; padding: 0 20px; color: #202124; }
+h1 { margin-bottom: 4px; }
+.sub { color: #5f6368; margin-bottom: 24px; }
+table { border-collapse: collapse; width: 100%; margin: 18px 0 28px; }
+th, td { border-bottom: 1px solid #ddd; padding: 10px; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px; }
+.card img { width: 100%; height: auto; }
+.note { margin-top: 24px; color: #5f6368; font-size: 0.93rem; line-height: 1.45; }
+@media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<h1>Fuel Fair Price Index — France</h1>
+<div class="sub">v0.6 visual index. Observed index is model-free; fair value and anomaly-rate series are model/version dependent and explicitly sourced in the CSV.</div>
+<table>
+<thead><tr><th>Fuel</th><th>Observed</th><th>Fundamental fair</th><th>Market tension</th><th>Local anomaly rate</th><th>Observed index</th></tr></thead>
+<tbody><tr><td>GAZOLE</td><td>2.427 €</td><td>2.337 €</td><td>+9.0 c/L</td><td>5.6%</td><td>143.9</td></tr><tr><td>SP95</td><td>2.239 €</td><td>2.205 €</td><td>+3.4 c/L</td><td>6.3%</td><td>123.5</td></tr></tbody>
+</table>
+<div class="grid">
+<div class="card"><img src="sp95_observed_vs_fair.png" alt="SP95 observed versus fair"></div>
+<div class="card"><img src="gazole_observed_vs_fair.png" alt="Gazole observed versus fair"></div>
+<div class="card"><img src="fuel_indices_base100.png" alt="Fuel indices base 100"></div>
+<div class="card"><img src="market_tension.png" alt="Market tension"></div>
+<div class="card"><img src="local_anomaly_rate.png" alt="Local anomaly rate"></div>
+</div>
+<div class="note">
+Observed price index: chained median station-to-station price relatives using stations present on consecutive dates.<br>
+Fundamental fair: DGEC refined quotations when available; otherwise DGEC-anchored public product-proxy reconstruction. Historical tax wedge comes from EU Weekly Oil Bulletin France TTC/HTT data.<br>
+Local anomaly rate: retrospective application of the frozen v0.5.1 local model to each historical station snapshot.
+</div>
+</body></html>

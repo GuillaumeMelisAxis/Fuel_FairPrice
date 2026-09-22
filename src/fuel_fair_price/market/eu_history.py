@@ -288,3 +288,49 @@ def load_france_weekly_htt(
         out.sort_values(["fuel", "date"])
         .reset_index(drop=True)
     )
+
+
+def _france_block(countries: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    france = countries.get("FR")
+    if france is not None:
+        return france
+    candidates = [k for k in countries if str(k).upper().startswith("FR")]
+    if not candidates:
+        raise RuntimeError(
+            f"France block not found. Country codes: {sorted(countries)[:40]}"
+        )
+    return countries[candidates[0]]
+
+
+def load_france_weekly_prices(
+    *,
+    start: str | None = "2020-01-01",
+) -> pd.DataFrame:
+    """Return weekly France TTC and HTT prices for SP95 and gazole.
+
+    Both EU workbook sheets are expressed in EUR / 1000 litres and are
+    converted here to EUR/L.  The paired TTC/HTT observations allow the index
+    layer to infer the contemporaneous effective tax wedge without hard-coding
+    historical exceptional tax measures.
+    """
+    workbook = download_history_workbook()
+    wo_tax = _france_block(parse_price_sheet(workbook, sheet_name="Prices wo taxes"))
+    with_tax = _france_block(parse_price_sheet(workbook, sheet_name="Prices with taxes"))
+
+    rows = []
+    for fuel, gasoline in (("SP95", True), ("GAZOLE", False)):
+        htt_col = _find_product_column(wo_tax.columns, gasoline=gasoline)
+        ttc_col = _find_product_column(with_tax.columns, gasoline=gasoline)
+
+        htt = wo_tax[["date", htt_col]].rename(columns={htt_col: "htt_eur_1000l"})
+        ttc = with_tax[["date", ttc_col]].rename(columns={ttc_col: "ttc_eur_1000l"})
+        tmp = htt.merge(ttc, on="date", how="inner")
+        tmp["fuel"] = fuel
+        tmp["htt_eur_l"] = pd.to_numeric(tmp["htt_eur_1000l"], errors="coerce") / 1000.0
+        tmp["ttc_eur_l"] = pd.to_numeric(tmp["ttc_eur_1000l"], errors="coerce") / 1000.0
+        rows.append(tmp[["date", "fuel", "htt_eur_l", "ttc_eur_l"]])
+
+    out = pd.concat(rows, ignore_index=True).dropna(subset=["htt_eur_l", "ttc_eur_l"])
+    if start is not None:
+        out = out[out["date"] >= pd.Timestamp(start)]
+    return out.sort_values(["fuel", "date"]).reset_index(drop=True)

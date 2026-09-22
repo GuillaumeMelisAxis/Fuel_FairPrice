@@ -1,4 +1,56 @@
-# Fuel Fair Price France — v0.5.1
+# Fuel Fair Price France — v0.6
+
+v0.6 freezes the validated v0.5.1 fair-price/local model and adds the historical
+visual index layer intended to be the first interface seen by a non-technical
+user.
+
+## v0.6 — build the historical visual index
+
+After the v0.5.1 panel/model and the latest `main.py` run are available:
+
+```powershell
+python scripts/build_historical_index.py
+```
+
+The script creates the four primary historical series:
+
+- **Observed Price** — national median pump price from the station panel;
+- **Fundamental Fair Price** — reconstructed national fundamental level;
+- **Market Tension** — observed median minus fundamental fair price, in c€/L;
+- **Local Anomaly Rate** — share of assessed stations flagged locally HIGH or VERY_HIGH.
+
+It also creates composition-resistant **base-100 observed price indices** for SP95
+and Gazole. Consecutive growth is computed from stations present at both dates,
+which avoids mechanical index moves caused by changes in sample composition.
+
+Main outputs:
+
+```text
+output/index/historical_fuel_index.csv
+output/index/index_metadata.json
+output/index/index_dashboard.html
+output/index/sp95_observed_vs_fair.png
+output/index/gazole_observed_vs_fair.png
+output/index/fuel_indices_base100.png
+output/index/market_tension.png
+output/index/local_anomaly_rate.png
+```
+
+The observed index is model-free. The historical anomaly rate is explicitly a
+retrospective application of the frozen v0.5.1 model. The historical fair series
+contains a `fundamental_fair_confidence` and `refined_quote_source` field so that
+DGEC official months, anchored proxy months and pre-anchor backcasts remain
+distinguishable.
+
+To refresh the public EU/FRED market caches:
+
+```powershell
+python scripts/build_historical_index.py --refresh-market-cache
+```
+
+---
+
+# Historical local model retained from v0.5.1
 
 Research prototype for a daily French SP95-E5 / Gazole fair-price index and
 station-level anomaly diagnostics.
