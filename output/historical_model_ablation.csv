@@ -1,0 +1,15 @@
+fuel,step,model,factors,n_test,mae_cent_l,rmse_cent_l,mae_improvement_vs_baseline_pct,rmse_improvement_vs_baseline_pct
+GAZOLE,0,baseline,,28342,4.915845741302661,7.050738196114968,0.0,0.0
+GAZOLE,1,code_region,code_region,28342,4.7218655687415305,6.89512455327382,3.9460183001944094,2.207054616308013
+GAZOLE,2,code_region+code_departement,"code_region,code_departement",28342,4.684610322985561,6.82894679912926,4.703878650509163,3.14564788560604
+GAZOLE,3,code_region+code_departement+road_type,"code_region,code_departement,road_type",28342,4.4674771870138175,6.197025650883724,9.120883320680228,12.108129978526916
+GAZOLE,4,code_region+code_departement+road_type+competition_bucket,"code_region,code_departement,road_type,competition_bucket",28342,4.455284463267803,6.191693522577391,9.3689123351705,12.183755085544368
+GAZOLE,5,code_region+code_departement+road_type+competition_bucket+isolation_bucket,"code_region,code_departement,road_type,competition_bucket,isolation_bucket",28342,4.452801340134559,6.1866609625935265,9.41942496847753,12.255131441379529
+GAZOLE,6,code_region+code_departement+road_type+competition_bucket+isolation_bucket+accessibility_class,"code_region,code_departement,road_type,competition_bucket,isolation_bucket,accessibility_class",28342,4.45354693528079,6.186142401330452,9.404257789003879,12.262486150186625
+SP95,0,baseline,,8653,4.185473246272971,5.942688356099732,0.0,0.0
+SP95,1,code_region,code_region,8653,4.132927346749448,5.885806783045117,1.2554350830055627,0.9571690394336474
+SP95,2,code_region+code_departement,"code_region,code_departement",8653,4.1096418498042455,5.870576795822563,1.8117759213071238,1.2134501416880106
+SP95,3,code_region+code_departement+road_type,"code_region,code_departement,road_type",8653,4.1096418498042455,5.870576795822563,1.8117759213071238,1.2134501416880106
+SP95,4,code_region+code_departement+road_type+competition_bucket,"code_region,code_departement,road_type,competition_bucket",8653,4.0847288005781035,5.8481633099595385,2.4070025004837126,1.5906108561653087
+SP95,5,code_region+code_departement+road_type+competition_bucket+isolation_bucket,"code_region,code_departement,road_type,competition_bucket,isolation_bucket",8653,4.075584087041062,5.846406392868656,2.6254894671650875,1.6201752045814422
+SP95,6,code_region+code_departement+road_type+competition_bucket+isolation_bucket+accessibility_class,"code_region,code_departement,road_type,competition_bucket,isolation_bucket,accessibility_class",8653,4.075806981602877,5.845891647989629,2.620164034443373,1.628837023074725

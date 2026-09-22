@@ -25,7 +25,7 @@ HIST_META_PATH = ROOT / "config" / "historical_local_model_meta.json"
 PERSISTENT_BIAS_PATH = ROOT / "config" / "station_persistent_bias.csv"
 
 
-def _load_v05_model():
+def _load_v051_model():
     if not (HIST_MODEL_PATH.exists() and HIST_META_PATH.exists()):
         return None
     return load_historical_model(
@@ -43,7 +43,7 @@ def main() -> None:
     logistics_overrides = load_logistics_overrides(
         ROOT / "config" / "logistics_overrides.csv"
     )
-    historical_bundle = _load_v05_model()
+    historical_bundle = _load_v051_model()
 
     daily_nowcast, market_snapshot = build_live_market_snapshot(ROOT, target_date=target)
     if market_snapshot.empty:
@@ -63,11 +63,11 @@ def main() -> None:
         print(
             "LOCAL MODEL: CROSS_SECTIONAL_FALLBACK (v0.4.2 logic)\n"
             "Run `python scripts/build_historical_panel.py` then "
-            "`python scripts/train_historical_local_model.py` to activate v0.5."
+            "`python scripts/train_historical_local_model.py` to activate v0.5.1."
         )
     else:
         _, historical_meta, _ = historical_bundle
-        print("LOCAL MODEL: HISTORICAL_PANEL v0.5")
+        print("LOCAL MODEL: HISTORICAL_PANEL v0.5.1-final")
         fuel_ranges = []
         for fuel, info in historical_meta.get("fuels", {}).items():
             fuel_ranges.append(
@@ -220,6 +220,8 @@ def main() -> None:
             "historical_model_coverage",
             "persistent_station_bias_cent_l",
             "persistent_bias_months",
+            "persistent_bias_confidence",
+            "persistence_status",
             "local_fair_price_eur_l",
             "local_residual_cent_l",
             "nearest_station_km",

@@ -8,7 +8,11 @@ import pandas as pd
 from fuel_fair_price.models.historical_local import (
     fit_historical_local_model,
     save_historical_model,
+    validate_factor_ablation,
     validate_historical_model,
+    validate_regime_splits,
+    ACTIVE_FACTORS_BY_FUEL,
+    DIAGNOSTIC_FACTORS_BY_FUEL,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,13 +20,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train the v0.5 historical local-premium model."
+        description="Train the v0.5.1 historical local-premium model."
     )
     parser.add_argument(
         "--panel",
         default=str(ROOT / "data" / "historical_station_panel.csv.gz"),
     )
     parser.add_argument("--holdout-months", type=int, default=3)
+    parser.add_argument(
+        "--shock-start",
+        default="2026-02-28",
+        help="Energy-regime break used for regime-aware validation.",
+    )
+    parser.add_argument("--transition-months", type=int, default=4)
+    parser.add_argument("--pre-shock-holdout-months", type=int, default=3)
     return parser.parse_args()
 
 
@@ -62,6 +73,29 @@ def main() -> None:
     else:
         print(validation.to_string(index=False))
 
+    regime_validation = validate_regime_splits(
+        panel,
+        shock_start=args.shock_start,
+        pre_shock_holdout_months=int(args.pre_shock_holdout_months),
+        transition_months=int(args.transition_months),
+        current_holdout_months=int(args.holdout_months),
+    )
+    print("\nREGIME-AWARE VALIDATION")
+    if regime_validation.empty:
+        print("Not enough history for regime-aware validation.")
+    else:
+        print(regime_validation.to_string(index=False))
+
+    ablation = validate_factor_ablation(
+        panel,
+        holdout_months=int(args.holdout_months),
+    )
+    print("\nFACTOR ABLATION")
+    if ablation.empty:
+        print("Not enough history for factor ablation.")
+    else:
+        print(ablation.to_string(index=False))
+
     model, meta, persistent = fit_historical_local_model(panel)
 
     save_historical_model(
@@ -79,6 +113,14 @@ def main() -> None:
         output_dir / "historical_model_validation.csv",
         index=False,
     )
+    regime_validation.to_csv(
+        output_dir / "historical_model_regime_validation.csv",
+        index=False,
+    )
+    ablation.to_csv(
+        output_dir / "historical_model_ablation.csv",
+        index=False,
+    )
     model.to_csv(
         output_dir / "historical_model_effects.csv",
         index=False,
@@ -87,6 +129,11 @@ def main() -> None:
         output_dir / "station_persistent_bias.csv",
         index=False,
     )
+
+    print("\nFINAL PRODUCTION FACTOR POLICY")
+    for fuel in sorted(ACTIVE_FACTORS_BY_FUEL):
+        print(f"{fuel}: active={list(ACTIVE_FACTORS_BY_FUEL[fuel])}")
+        print(f"{fuel}: diagnostic_only={list(DIAGNOSTIC_FACTORS_BY_FUEL.get(fuel, ())) }")
 
     print("\nMODEL SAVED")
     print(ROOT / "config" / "historical_local_model.csv")
@@ -109,10 +156,13 @@ def main() -> None:
                 "fuel",
                 "level",
                 "effect_cent_l",
+                "provisional_effect_cent_l",
                 "raw_effect_cent_l",
                 "n_stations",
                 "n_obs",
                 "confidence",
+                "status",
+                "constraint_applied",
             ]
         ].to_string(index=False)
     )

@@ -1,11 +1,11 @@
-# Fuel Fair Price France — v0.5
+# Fuel Fair Price France — v0.5.1
 
 Research prototype for a daily French SP95-E5 / Gazole fair-price index and
 station-level anomaly diagnostics.
 
-## What changes in v0.5
+## What changes in v0.5.1
 
-v0.4.x estimated local premiums from the current cross-section. v0.5 learns them
+v0.4.x estimated local premiums from the current cross-section. v0.5/v0.5.1 learn them
 from an official historical **station-date panel** built from the annual
 government fuel-price archives.
 
@@ -28,7 +28,7 @@ where `L_i^hist` is predicted from persistent observable local factors:
 - isolation;
 - accessibility / logistics class.
 
-The historical target is not the raw price. For each month and fuel, v0.5 removes
+The historical target is not the raw price. For each month and fuel, v0.5.1 removes
 the national station median:
 
 \[
@@ -44,7 +44,7 @@ A national market shock therefore cannot be learned as a local premium.
 
 ## Important design choice: no station fixed effect in fair price
 
-v0.5 estimates a `persistent_station_bias_cent_l`, but **does not add it to the
+v0.5.1 estimates a `persistent_station_bias_cent_l`, but **does not add it to the
 fair price**. Otherwise a station that is persistently expensive could gradually
 become its own definition of "normal".
 
@@ -97,8 +97,17 @@ data/raw/annual/
 python scripts/train_historical_local_model.py
 ```
 
-The last three months are used as an out-of-sample holdout diagnostic, then the
-final model is refit on all available months.
+The last three months are still used as the standard out-of-sample holdout diagnostic.
+
+v0.5.1 additionally performs regime-aware chronological validation around a default
+energy-market break of `2026-02-28`:
+
+- `PRE_SHOCK`: last 3 pre-break months;
+- `SHOCK_ONSET`: first 4 monthly snapshots from the break;
+- `CURRENT_REGIME`: following 3 months.
+
+It also runs a progressive factor ablation. The final model is then refit on all
+available months.
 
 Outputs:
 
@@ -108,6 +117,8 @@ config/historical_local_model_meta.json
 config/station_persistent_bias.csv
 
 output/historical_model_validation.csv
+output/historical_model_regime_validation.csv
+output/historical_model_ablation.csv
 output/historical_model_effects.csv
 output/station_persistent_bias.csv
 ```
@@ -121,7 +132,7 @@ python main.py
 If the historical model exists, the console shows:
 
 ```text
-LOCAL MODEL: HISTORICAL_PANEL v0.5
+LOCAL MODEL: HISTORICAL_PANEL v0.5.1
 ```
 
 If it does not exist, `main.py` remains usable and explicitly falls back to:
@@ -131,6 +142,18 @@ LOCAL MODEL: CROSS_SECTIONAL_FALLBACK
 ```
 
 ## Historical model
+
+### v0.5.1 stabilization constraints
+
+For SP95, `ROUTE` is the road reference (`0 c/L`). `AUTOROUTE` is estimated
+relative to ROUTE and is constrained to a non-negative premium. A negative
+historical differential therefore becomes `0 c/L`; no arbitrary positive premium
+is injected.
+
+Historical logistics effects with fewer than 10 unique stations are diagnostic
+only: `effect_cent_l = 0`, while `provisional_effect_cent_l` and
+`raw_effect_cent_l` remain exported.
+
 
 For each fuel, robust median backfitting estimates:
 
@@ -169,6 +192,8 @@ historical_model_coverage
 
 persistent_station_bias_cent_l
 persistent_bias_months
+persistent_bias_confidence
+persistence_status
 
 local_fair_price_eur_l
 local_residual_cent_l
@@ -190,7 +215,7 @@ For historical factor effects, confidence is based on unique stations:
 - `LOW`: at least 10;
 - `INSUFFICIENT`: fewer than 10.
 
-A logistics effect with insufficient support is labelled `PROVISIONAL`.
+A logistics effect with insufficient support is labelled `PROVISIONAL` and its applied effect is zero.
 
 A station with no valid local peer comparison is:
 
@@ -206,7 +231,7 @@ UNASSESSED_INSUFFICIENT_PEERS
 pytest -q
 ```
 
-The packaged v0.5 passes the complete test suite, including tests for:
+The packaged v0.5.1 passes the complete test suite, including tests for:
 
 - time-effect removal;
 - unique-station shrinkage;
@@ -218,10 +243,32 @@ The packaged v0.5 passes the complete test suite, including tests for:
 
 ## Research status
 
-v0.5 is still a research prototype, not a legal determination of excessive or
+v0.5.1 is still a research prototype, not a legal determination of excessive or
 unlawful pricing. The model separates:
 
 1. national fundamental spread;
 2. historical structural local premium;
 3. current local excess versus peers;
 4. persistent station pricing bias as a diagnostic.
+
+## Final v0.5.1 production factors
+
+The production specification is deliberately smaller than the full research specification and
+is selected from the chronological out-of-sample ablation.
+
+| Fuel | Active fair-price factors | Diagnostic only |
+|---|---|---|
+| GAZOLE | region, department, road type, competition, isolation | accessibility/logistics |
+| SP95 | region, department, competition, isolation | road type, accessibility/logistics |
+
+Diagnostic-only factors remain estimated and exported for research/audit purposes, but are not
+included in `structural_local_premium_cent_l` or `local_fair_price_eur_l`.
+
+### Historical index roadmap
+
+The monthly station panel can also support a time-series index. The first robust index should be
+an observed national pump-price index by fuel, built from the monthly cross-section (median price,
+station count and dispersion) and rebased to 100 at a chosen base date. A separate historical
+fundamental/fair-price index can then be added once the historical refined-product component,
+taxes and margin convention are reconstructed point-in-time. The two series should remain
+separate so observed prices are never retrospectively rewritten by a later model calibration.

@@ -1,17 +1,42 @@
 {
-  "model_version": "0.5.0",
+  "model_version": "0.5.1-final",
   "model_type": "HISTORICAL_PANEL",
   "target": "relative_price_cent_l",
   "time_effect": "date_x_fuel_national_station_median_removed",
   "station_fixed_effect_applied_to_fair_price": false,
-  "factors": [
-    "code_region",
-    "code_departement",
-    "road_type",
-    "competition_bucket",
-    "isolation_bucket",
-    "accessibility_class"
-  ],
+  "production_factor_policy": "fuel_specific_active_factors_from_oos_ablation",
+  "active_factors_by_fuel": {
+    "GAZOLE": [
+      "code_region",
+      "code_departement",
+      "road_type",
+      "competition_bucket",
+      "isolation_bucket"
+    ],
+    "SP95": [
+      "code_region",
+      "code_departement",
+      "competition_bucket",
+      "isolation_bucket"
+    ]
+  },
+  "diagnostic_factors_by_fuel": {
+    "GAZOLE": [
+      "accessibility_class"
+    ],
+    "SP95": [
+      "road_type",
+      "accessibility_class"
+    ]
+  },
+  "factors": [],
+  "stabilization": {
+    "accessibility_class_diagnostic_only": true,
+    "sp95_road_type_diagnostic_only": true,
+    "insufficient_logistics_applied_effect_zero": true,
+    "sp95_road_reference": "ROUTE=0; AUTOROUTE premium constrained >= 0",
+    "persistent_bias_applied_to_fair_price": false
+  },
   "config": {
     "trim_abs_robust_score": 4.0,
     "n_backfit_iterations": 10,
@@ -22,26 +47,50 @@
     "isolation_shrinkage_stations": 50.0,
     "accessibility_shrinkage_stations": 10.0,
     "persistent_bias_shrinkage_months": 6.0,
+    "persistent_status_min_months": 12,
+    "persistent_high_confidence_months": 18,
+    "persistent_medium_confidence_months": 12,
+    "persistent_low_confidence_months": 6,
     "high_confidence_stations": 100,
     "medium_confidence_stations": 30,
     "low_confidence_stations": 10
   },
   "fuels": {
     "GAZOLE": {
-      "centre_cent_l": -0.37449779423676377,
+      "centre_cent_l": -0.3766694543719905,
       "train_start": "2025-01-31",
       "train_end": "2026-08-31",
       "n_observations": 179260,
       "n_unique_stations": 9932,
-      "n_months": 20
+      "n_months": 20,
+      "active_factors": [
+        "code_region",
+        "code_departement",
+        "road_type",
+        "competition_bucket",
+        "isolation_bucket"
+      ],
+      "diagnostic_factors": [
+        "accessibility_class"
+      ]
     },
     "SP95": {
-      "centre_cent_l": -0.20952083723549403,
+      "centre_cent_l": -0.2019003633935094,
       "train_start": "2025-01-31",
       "train_end": "2026-08-31",
       "n_observations": 57368,
       "n_unique_stations": 3995,
-      "n_months": 20
+      "n_months": 20,
+      "active_factors": [
+        "code_region",
+        "code_departement",
+        "competition_bucket",
+        "isolation_bucket"
+      ],
+      "diagnostic_factors": [
+        "road_type",
+        "accessibility_class"
+      ]
     }
   }
 }
